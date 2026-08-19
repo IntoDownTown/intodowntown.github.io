@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Dictionnaire</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Dico">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%232b6cb0'/%3E%3Ctext x='90' y='125' font-family='Georgia,serif' font-size='110' font-weight='700' text-anchor='middle' fill='%23fff'%3ED%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fff; --fg:#1c1c1e; --muted:#6b6f76; --line:#e4e6ea; --card:#f7f8fa;
+  --accent:#2b6cb0; --accent-bg:#eaf1f9; --contra:#a23b3b; --contra-bg:#fbeded;
+  --chip:#eef0f4; --shadow:0 1px 0 rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#111214; --fg:#e9eaec; --muted:#9aa0a8; --line:#2a2d31; --card:#1a1c1f;
+    --accent:#7fb0e8; --accent-bg:#1b2733; --contra:#e59090; --contra-bg:#2e1e1e;
+    --chip:#24272b; --shadow:0 1px 0 rgba(255,255,255,.04);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;
+  padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+header{
+  position:sticky; top:0; z-index:10; background:var(--bg);
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  border-bottom:1px solid var(--line);
+}
+.bar{display:flex; gap:8px; align-items:center}
+#back{
+  flex:0 0 auto; width:44px; height:44px; border:0; border-radius:12px;
+  background:var(--chip); color:var(--fg); font-size:20px; line-height:1; cursor:pointer;
+  display:none;
+}
+#back.on{display:block}
+form{flex:1 1 auto; display:flex; gap:8px; margin:0}
+input[type=search]{
+  flex:1 1 auto; min-width:0; height:44px; padding:0 14px;
+  font-size:17px; color:var(--fg); background:var(--card);
+  border:1px solid var(--line); border-radius:12px; -webkit-appearance:none; appearance:none;
+}
+input[type=search]:focus{outline:none; border-color:var(--accent)}
+button.go{
+  flex:0 0 auto; height:44px; padding:0 16px; border:0; border-radius:12px;
+  background:var(--accent); color:#fff; font-size:16px; font-weight:600; cursor:pointer;
+}
+main{max-width:720px; margin:0 auto; padding:16px 16px 64px}
+
+.note{color:var(--muted); font-size:14px; margin:0 0 14px}
+.msg{color:var(--muted); text-align:center; padding:48px 12px; font-size:16px}
+.msg b{color:var(--fg)}
+.msg button{
+  display:block; margin:18px auto 0; height:44px; padding:0 20px; border:0; border-radius:12px;
+  background:var(--chip); color:var(--fg); font-size:16px; cursor:pointer;
+}
+.spin{
+  width:26px; height:26px; margin:56px auto; border-radius:50%;
+  border:3px solid var(--line); border-top-color:var(--accent); animation:r .8s linear infinite;
+}
+@keyframes r{to{transform:rotate(360deg)}}
+
+.entry{margin:0 0 30px}
+.entry h1{font:700 30px/1.2 Georgia,"Times New Roman",serif; margin:0 0 4px; letter-spacing:-.01em}
+.cat{color:var(--accent); font-size:14px; font-weight:600; margin:0 0 2px}
+.orig{color:var(--muted); font-size:14px; font-style:italic; margin:0 0 14px}
+
+ol.senses{list-style:none; margin:0; padding:0; counter-reset:s}
+ol.senses>li{
+  position:relative; padding:0 0 14px 30px; margin:0 0 14px;
+  border-bottom:1px solid var(--line);
+}
+ol.senses>li:last-child{border-bottom:0}
+.num{
+  position:absolute; left:0; top:1px; width:22px; text-align:right;
+  color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums;
+}
+.rub{
+  display:inline-block; margin:0 0 4px; padding:2px 8px; border-radius:6px;
+  background:var(--accent-bg); color:var(--accent);
+  font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em;
+}
+.def{margin:0}
+em.ex{display:block; margin-top:4px; color:var(--muted); font-style:italic}
+
+.syn{margin-top:8px}
+.syn .lbl{
+  display:block; font-size:12px; font-weight:600; text-transform:uppercase;
+  letter-spacing:.04em; color:var(--muted); margin-bottom:4px;
+}
+.chip{
+  display:inline-block; margin:0 6px 6px 0; padding:5px 11px; border:0; border-radius:20px;
+  background:var(--chip); color:var(--fg); font-size:15px; font-family:inherit;
+}
+button.chip{cursor:pointer; background:var(--accent-bg); color:var(--accent); font-weight:500}
+.contra button.chip{background:var(--contra-bg); color:var(--contra)}
+.indic{display:inline-block; margin:0 6px 6px 0; font-size:13px; color:var(--muted); font-style:italic}
+
+button.lien{
+  border:0; padding:0; background:none; font:inherit; color:var(--accent);
+  cursor:pointer; text-decoration:underline; text-underline-offset:2px;
+}
+
+section.blk{margin:0 0 30px}
+section.blk>h2{
+  font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--muted); margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line);
+}
+.loc{margin:0 0 12px}
+.loc dt{font-weight:600; margin:0}
+.loc dd{margin:2px 0 0; color:var(--muted)}
+.homo{margin:0 0 8px; font-size:15px}
+.homo .cg{color:var(--muted); font-size:14px}
+
+.hist{margin-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <button id="back" type="button" aria-label="Retour">&#8592;</button>
+    <form id="f">
+      <input id="q" type="search" name="q" placeholder="Chercher un mot"
+             autocapitalize="off" autocorrect="off" autocomplete="off"
+             spellcheck="false" enterkeyhint="search">
+      <button class="go" type="submit">OK</button>
+    </form>
+  </div>
+</header>
+
+<main id="out"></main>
+
+<script>
+"use strict";
+
+/* Passer à 'https://api.allorigins.win/raw?url=' si Larousse bloque les requêtes navigateur. */
+const PROXY = '';
+
+const BASE = 'https://www.larousse.fr';
+const DEF  = BASE + '/dictionnaires/francais/';
+const SYN  = BASE + '/dictionnaires/synonymes/';
+const HIST_KEY = 'dic.hist';
+const HIST_MAX = 15;
+
+const out   = document.getElementById('out');
+const input = document.getElementById('q');
+const back  = document.getElementById('back');
+
+/* ---------- utilitaires DOM ---------- */
+
+const el = (tag, cls, txt) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+};
+const clean = s => (s || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+const cls = n => (typeof n.className === 'string' ? n.className : '');
+
+/* ---------- réseau ---------- */
+
+function target(u) { return PROXY ? PROXY + encodeURIComponent(u) : u; }
+
+async function fetchDoc(u) {
+  const r = await fetch(target(u), { credentials: 'omit', redirect: 'follow' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const html = await r.text();
+  return { doc: new DOMParser().parseFromString(html, 'text/html'), url: r.url || u };
+}
+
+/* Dernier segment « mot » d'une URL Larousse : /dictionnaires/<dico>/<mot>/<id> */
+function wordFromPath(path) {
+  try { path = new URL(path, BASE).pathname; } catch (e) { /* déjà un chemin */ }
+  const p = path.split('/').filter(Boolean);       // dictionnaires, francais, mot, id
+  if (p[0] !== 'dictionnaires' || p.length < 3) return '';
+  return clean(decodeURIComponent(p[2]));
+}
+
+/* ---------- rendu sûr du HTML tiers (jamais d'innerHTML) ---------- */
+
+function inline(src, dst) {
+  for (const n of src.childNodes) {
+    if (n.nodeType === 3) { dst.appendChild(document.createTextNode(n.nodeValue.replace(/ /g, ' '))); continue; }
+    if (n.nodeType !== 1) continue;
+
+    const tag = n.tagName.toLowerCase();
+    const c = cls(n);
+    if (tag === 'audio' || tag === 'script' || tag === 'style' || c.includes('linkaudio')) continue;
+
+    if (tag === 'a') {
+      const w = wordFromPath(n.getAttribute('href') || '');
+      if (w) { dst.appendChild(link(clean(n.textContent), w)); continue; }
+    }
+
+    let box = dst;
+    if (tag === 'i' || tag === 'em') box = dst.appendChild(el('i'));
+    else if (tag === 'b' || tag === 'strong') box = dst.appendChild(el('b'));
+    else if (tag === 'sup') box = dst.appendChild(el('sup'));
+    else if (c.includes('ExempleDefinition')) box = dst.appendChild(el('em', 'ex'));
+    inline(n, box);
+  }
+}
+
+/* Bouton-lien : la ponctuation finale reste du texte, hors de la zone cliquable. */
+function link(text, word) {
+  const frag = document.createDocumentFragment();
+  const m = text.match(/^(.*?)([\s.,;:]*)$/);
+  const b = el('button', 'lien', m[1]);
+  b.type = 'button';
+  b.addEventListener('click', () => go(word));
+  frag.appendChild(b);
+  if (m[2]) frag.appendChild(document.createTextNode(m[2]));
+  return frag;
+}
+
+/* ---------- parsing ---------- */
+
+/* « verbe transitif <a>Conjugaison</a> » -> « verbe transitif » */
+function catText(node) {
+  if (!node) return '';
+  const c = node.cloneNode(true);
+  c.querySelectorAll('a').forEach(a => a.remove());
+  return clean(c.textContent);
+}
+
+function parseEntries(doc) {
+  const entries = [];
+  doc.querySelectorAll('article.BlocDefinition').forEach(art => {
+    let cur = null;
+    for (const child of art.children) {
+      const c = cls(child);
+      if (c.includes('Zone-Entree')) {
+        cur = {
+          head: child.querySelector('.AdresseDefinition'),
+          cat:  catText(child.querySelector('.CatgramDefinition')),
+          orig: child.querySelector('.OrigineDefinition'),
+          senses: []
+        };
+        entries.push(cur);
+      } else if (child.tagName === 'UL' && c.includes('Definitions')) {
+        if (!cur) { cur = { head: null, cat: '', orig: null, senses: [] }; entries.push(cur); }
+        child.querySelectorAll(':scope > li').forEach(li => cur.senses.push(li));
+      }
+    }
+  });
+  return entries;
+}
+
+const notFound = doc =>
+  !!doc.querySelector('section.corrector') || !doc.querySelector('article.BlocDefinition');
+
+/* ---------- rendu d'un sens ---------- */
+
+/* « alinéa - chapitre - paragraphe » / « chronique, papier. » -> pastilles cliquables */
+function renderSynList(p, box) {
+  const add = (text, word) => {
+    text = clean(text).replace(/^[-–,;]+/, '').replace(/[-–,;.]+$/, '').trim();
+    if (!text) return;
+    if (word) { const b = el('button', 'chip', text); b.type = 'button'; b.addEventListener('click', () => go(word)); box.appendChild(b); }
+    else box.appendChild(el('span', 'chip', text));
+  };
+  (function walk(node) {
+    for (const n of node.childNodes) {
+      if (n.nodeType === 3) { n.nodeValue.split(/\s+[-–]\s+|[,;]/).forEach(t => add(t)); continue; }
+      if (n.nodeType !== 1) continue;
+      if (cls(n).includes('indicateurDefinition')) {
+        box.appendChild(el('span', 'indic', clean(n.textContent).replace(/^[-–\s]+/, '')));
+        continue;
+      }
+      if (n.tagName === 'A') { add(n.textContent, wordFromPath(n.getAttribute('href') || '')); continue; }
+      walk(n);
+    }
+  })(p);
+}
+
+/* Paires « Synonymes : » / « Contraire : » d'un <li> */
+function renderPairs(li, host) {
+  const kids = Array.from(li.children);
+  kids.forEach((n, i) => {
+    if (!cls(n).includes('LibelleSynonyme')) return;
+    const list = kids[i + 1];
+    if (!list || !cls(list).includes('Synonymes')) return;
+    const label = clean(n.textContent);
+    const wrap = el('div', 'syn' + (/contraire/i.test(label) ? ' contra' : ''));
+    wrap.appendChild(el('span', 'lbl', label.replace(/\s*:\s*$/, '')));
+    renderSynList(list, wrap);
+    host.appendChild(wrap);
+  });
+}
+
+function renderSense(li) {
+  const item = el('li');
+
+  const num = li.querySelector(':scope > .numDef');
+  item.appendChild(el('span', 'num', num ? clean(num.textContent) : '•'));
+
+  const rub = li.querySelector(':scope > .RubriqueDefinition');
+  if (rub) item.appendChild(el('span', 'rub', clean(rub.textContent)));
+
+  /* le texte du sens = tout sauf les éléments rendus à part */
+  const body = el('p', 'def');
+  const skip = ['numDef', 'RubriqueDefinition', 'LibelleSynonyme', 'Synonymes'];
+  const src = document.createElement('div');
+  for (const n of li.childNodes) {
+    if (n.nodeType === 1 && skip.some(k => cls(n).includes(k))) continue;
+    src.appendChild(n.cloneNode(true));
+  }
+  inline(src, body);
+  if (clean(body.textContent)) item.appendChild(body);
+
+  renderPairs(li, item);
+  return item;
+}
+
+/* ---------- rendu de la page ---------- */
+
+function renderEntry(e) {
+  const box = el('article', 'entry');
+
+  const h1 = el('h1');
+  if (e.head) inline(e.head, h1);
+  if (clean(h1.textContent)) box.appendChild(h1);
+
+  if (e.cat) box.appendChild(el('p', 'cat', e.cat));
+  if (e.orig) { const o = el('p', 'orig'); inline(e.orig, o); box.appendChild(o); }
+
+  const list = el('ol', 'senses');
+  e.senses.forEach(li => list.appendChild(renderSense(li)));
+  box.appendChild(list);
+  return box;
+}
+
+function renderSynDoc(doc) {
+  const entries = parseEntries(doc);
+  const rows = [];
+  entries.forEach(e => e.senses.forEach(li => {
+    const gloss = el('dt');
+    const src = document.createElement('div');
+    for (const n of li.childNodes) {
+      if (n.nodeType === 1 && ['numDef', 'LibelleSynonyme', 'Synonymes'].some(k => cls(n).includes(k))) continue;
+      src.appendChild(n.cloneNode(true));
+    }
+    inline(src, gloss);
+    const wrap = el('dl', 'loc');
+    if (clean(gloss.textContent)) wrap.appendChild(gloss);
+    const pairs = el('div');
+    renderPairs(li, pairs);
+    if (!pairs.childNodes.length) return;
+    wrap.appendChild(pairs);
+    rows.push(wrap);
+  }));
+  if (!rows.length) return null;
+
+  const sec = el('section', 'blk');
+  sec.appendChild(el('h2', null, 'Synonymes et contraires'));
+  rows.forEach(r => sec.appendChild(r));
+  return sec;
+}
+
+function renderLocutions(doc) {
+  const items = doc.querySelectorAll('article.BlocLocutions li.Locution');
+  if (!items.length) return null;
+  const sec = el('section', 'blk');
+  sec.appendChild(el('h2', null, 'Expressions'));
+  items.forEach(li => {
+    const dl = el('dl', 'loc');
+    const dt = el('dt'), dd = el('dd');
+    const a = li.querySelector('.AdresseLocution');
+    const t = li.querySelector('.TexteLocution');
+    if (a) { inline(a, dt); dt.textContent = clean(dt.textContent).replace(/,\s*$/, ''); }
+    if (t) inline(t, dd);
+    dl.appendChild(dt); dl.appendChild(dd);
+    sec.appendChild(dl);
+  });
+  return sec;
+}
+
+function renderHomonymes(doc) {
+  const items = doc.querySelectorAll('article.Blochomonymes li.Homonyme');
+  if (!items.length) return null;
+  const sec = el('section', 'blk');
+  sec.appendChild(el('h2', null, 'Homonymes'));
+  items.forEach(li => {
+    const p = el('p', 'homo');
+    const cg = li.querySelector('.CatGramHomonyme');
+    const src = document.createElement('div');
+    for (const n of li.childNodes) {
+      if (n === cg) continue;
+      src.appendChild(n.cloneNode(true));
+    }
+    inline(src, p);
+    if (cg) { const s = el('span', 'cg'); inline(cg, s); p.appendChild(document.createTextNode(' ')); p.appendChild(s); }
+    sec.appendChild(p);
+  });
+  return sec;
+}
+
+/* ---------- historique ---------- */
+
+const readHist = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch (e) { return []; } };
+function pushHist(word) {
+  const h = readHist().filter(w => w !== word);
+  h.unshift(word);
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, HIST_MAX))); } catch (e) {}
+}
+
+function renderHome() {
+  out.textContent = '';
+  const h = readHist();
+  const msg = el('div', 'msg');
+  msg.appendChild(el('p', null, 'Un mot, sa définition, ses synonymes.'));
+  out.appendChild(msg);
+  if (!h.length) return;
+  const sec = el('section', 'blk hist');
+  sec.appendChild(el('h2', null, 'Recherches récentes'));
+  h.forEach(w => {
+    const b = el('button', 'chip', w);
+    b.type = 'button';
+    b.addEventListener('click', () => go(w));
+    sec.appendChild(b);
+  });
+  out.appendChild(sec);
+}
+
+/* ---------- recherche ---------- */
+
+let seq = 0;
+
+async function show(word) {
+  const my = ++seq;
+  input.value = word;
+  input.blur();
+  out.textContent = '';
+  out.appendChild(el('div', 'spin'));
+  window.scrollTo(0, 0);
+
+  let main;
+  try {
+    main = await fetchDoc(DEF + encodeURIComponent(word));
+  } catch (e) {
+    if (my !== seq) return;
+    out.textContent = '';
+    const m = el('div', 'msg');
+    m.appendChild(el('p', null, 'Pas de réseau, ou Larousse est injoignable.'));
+    const b = el('button', null, 'Réessayer');
+    b.type = 'button';
+    b.addEventListener('click', () => show(word));
+    m.appendChild(b);
+    out.appendChild(m);
+    return;
+  }
+  if (my !== seq) return;
+
+  if (notFound(main.doc)) {
+    out.textContent = '';
+    const m = el('div', 'msg');
+    m.appendChild(el('p', null, 'Aucune entrée pour « ' + word + ' ».'));
+    out.appendChild(m);
+    return;
+  }
+
+  const lemma = wordFromPath(main.url) || word;
+  pushHist(lemma);
+
+  out.textContent = '';
+  if (lemma.toLowerCase() !== word.toLowerCase()) {
+    out.appendChild(el('p', 'note', word + ' → ' + lemma));
+  }
+
+  const entries = parseEntries(main.doc);
+  entries.forEach(e => out.appendChild(renderEntry(e)));
+
+  const later = [];
+  const loc = renderLocutions(main.doc); if (loc) later.push(loc);
+  const hom = renderHomonymes(main.doc); if (hom) later.push(hom);
+
+  /* les synonymes arrivent après : ils ne doivent pas retarder les définitions */
+  const synBox = el('div');
+  out.appendChild(synBox);
+  later.forEach(s => out.appendChild(s));
+
+  try {
+    let s = await fetchDoc(SYN + encodeURIComponent(word));
+    if (notFound(s.doc) && lemma !== word) s = await fetchDoc(SYN + encodeURIComponent(lemma));
+    if (my !== seq) return;
+    if (!notFound(s.doc)) {
+      const sec = renderSynDoc(s.doc);
+      if (sec) synBox.appendChild(sec);
+    }
+  } catch (e) { /* non bloquant : les synonymes par sens sont déjà affichés */ }
+}
+
+function go(word) {
+  word = clean(word);
+  if (!word) return;
+  history.pushState({ m: word }, '', '#' + encodeURIComponent(word));
+  back.classList.add('on');
+  show(word);
+}
+
+document.getElementById('f').addEventListener('submit', ev => {
+  ev.preventDefault();
+  go(input.value);
+});
+
+back.addEventListener('click', () => history.back());
+
+window.addEventListener('popstate', () => {
+  const w = clean(decodeURIComponent(location.hash.slice(1)));
+  if (w) { show(w); } else { seq++; input.value = ''; renderHome(); }
+  back.classList.toggle('on', !!w);
+});
+
+(function start() {
+  const w = location.hash ? clean(decodeURIComponent(location.hash.slice(1))) : '';
+  if (w) { back.classList.add('on'); show(w); }
+  else renderHome();
+})();
+</script>
+</body>
+</html>
