@@ -126,6 +126,13 @@ em.ex{display:block; margin-top:4px; color:var(--muted); font-style:italic}
 button.chip{cursor:pointer; background:var(--accent-bg); color:var(--accent); font-weight:500}
 .contra button.chip{background:var(--contra-bg); color:var(--contra)}
 .indic{display:inline-block; margin:0 6px 6px 0; font-size:13px; color:var(--muted); font-style:italic}
+.genre{display:inline-block; margin:0 8px 6px -2px; font-size:13px; color:var(--muted); font-style:italic}
+
+section.trad{padding-bottom:14px; border-bottom:1px solid var(--line)}
+section.trad:last-child{padding-bottom:0; border-bottom:0}
+section.trad .cat{margin:14px 0 6px}
+section.trad .cat:first-of-type{margin-top:0}
+.tr{margin:0 0 6px}
 
 button.lien{
   border:0; padding:0; background:none; font:inherit; color:var(--accent);
@@ -174,6 +181,11 @@ const BASE = 'https://www.larousse.fr';
 const DEF  = BASE + '/dictionnaires/francais/';
 const SYN  = BASE + '/dictionnaires/synonymes/';
 const EN_API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
+const TRAD = {
+  fr: { url: BASE + '/dictionnaires/francais-anglais/', to: 'en' },
+  en: { url: BASE + '/dictionnaires/anglais-francais/', to: 'fr' },
+  es: { url: BASE + '/dictionnaires/espagnol-francais/', to: 'fr' }
+};
 const ES_API = 'https://es.wiktionary.org/w/api.php';
 
 const HIST_MAX  = 15;
@@ -188,7 +200,7 @@ const LANGS = {
       home:'Un mot, sa définition, ses synonymes.', recent:'Recherches récentes',
       offline: s => 'Pas de réseau, ou ' + s + ' est injoignable.', retry:'Réessayer',
       none: w => 'Aucune entrée pour « ' + w + ' ».',
-      syn:'Synonymes et contraires', expr:'Expressions', homo:'Homonymes',
+      syn:'Synonymes et contraires', expr:'Expressions', homo:'Homonymes', trad:'Traduction en anglais',
       synonyms:'Synonymes', antonyms:'Contraires'
     }
   },
@@ -199,7 +211,7 @@ const LANGS = {
       home:'A word, its definition, its synonyms.', recent:'Recent searches',
       offline: s => 'No network, or ' + s + ' is unreachable.', retry:'Retry',
       none: w => 'No entry for “' + w + '”.',
-      syn:'Synonyms and antonyms', expr:'Expressions', homo:'Homonyms',
+      syn:'Synonyms and antonyms', expr:'Expressions', homo:'Homonyms', trad:'French translation',
       synonyms:'Synonyms', antonyms:'Antonyms'
     }
   },
@@ -210,7 +222,7 @@ const LANGS = {
       home:'Una palabra, su definición, sus sinónimos.', recent:'Búsquedas recientes',
       offline: s => 'Sin red, o ' + s + ' no responde.', retry:'Reintentar',
       none: w => 'No hay entrada para «' + w + '».',
-      syn:'Sinónimos y antónimos', expr:'Expresiones', homo:'Homónimos',
+      syn:'Sinónimos y antónimos', expr:'Expresiones', homo:'Homónimos', trad:'Traducción al francés',
       synonyms:'Sinónimos', antonyms:'Antónimos'
     }
   }
@@ -486,15 +498,22 @@ function renderHomonymes(doc) {
 /* ---------- source française : Larousse ---------- */
 
 async function frFetch(w) {
+  const trad = fetchTrad('fr', w);                 /* en parallèle de la définition */
   const main = await fetchDoc(DEF + encodeURIComponent(w));
-  if (notFound(main.doc)) return null;
 
-  const lemma = wordFromPath(main.url) || w;
+  const sec = renderTrad(await trad, w, TRAD.fr.to);
+  const missing = notFound(main.doc);
+  /* la traduction seule vaut mieux qu'une page d'erreur */
+  if (missing && !sec) return null;
+
+  const lemma = (!missing && wordFromPath(main.url)) || w;
   let synBox = null;
 
   return {
     lemma,
     render(box) {
+      if (sec) box.appendChild(sec);
+      if (missing) return;
       LINKWORD = wordFromPath;
       parseEntries(main.doc).forEach(e => box.appendChild(renderEntry(e)));
 
@@ -506,6 +525,7 @@ async function frFetch(w) {
       const hom = renderHomonymes(main.doc); if (hom) box.appendChild(hom);
     },
     async more(alive) {
+      if (!synBox) return;                         /* pas de définition : rien à compléter */
       try {
         let syn = await fetchDoc(SYN + encodeURIComponent(w));
         if (notFound(syn.doc) && lemma !== w) syn = await fetchDoc(SYN + encodeURIComponent(lemma));
@@ -516,6 +536,101 @@ async function frFetch(w) {
       } catch (e) { /* non bloquant : les synonymes par sens sont déjà affichés */ }
     }
   };
+}
+
+/* ---------- traduction française : Larousse bilingue ---------- */
+
+/* Jamais rejetée : sans traduction, la définition s'affiche seule. */
+function fetchTrad(l, w) {
+  return fetchDoc(TRAD[l].url + encodeURIComponent(w)).then(r => r.doc, () => null);
+}
+
+/* « <a>maison</a> <span class=Genre>f</span> » -> pastille + genre */
+function tradChip(tr, host, to) {
+  const c = tr.cloneNode(true);
+  c.querySelectorAll('.Genre, .Metalangue2, .FormeFlechieTraduction, audio, [class*=lienson], [class*=lienconj]')
+   .forEach(n => n.remove());
+  const text = clean(c.textContent).replace(/[,;]+$/, '');
+  if (!text) return;
+
+  const a = c.querySelector('a');
+  const w = a ? wordFromPath(a.getAttribute('href') || '') : '';
+  if (w && clean(a.textContent).replace(/[,;]+$/, '') === text) {
+    const b = el('button', 'chip', text);
+    b.type = 'button';
+    b.addEventListener('click', () => goIn(to, w));   /* la traduction ouvre l'article correspondant */
+    host.appendChild(b);
+  } else {
+    host.appendChild(el('span', 'chip', text));
+  }
+
+  const add = (sel, klass) => {
+    const n = tr.querySelector(sel);
+    const txt = n ? clean(n.textContent).replace(/[,;]+$/, '') : '';
+    if (txt) host.appendChild(el('span', klass, txt));
+  };
+  add('.Genre', 'genre');          /* maison f */
+  add('.Metalangue2', 'indic');    /* lorry (UK) */
+}
+
+/* Un sens : indicateurs de domaine ou d'emploi, puis les traductions. */
+function tradSense(li, host, to) {
+  const src = li.cloneNode(true);
+  src.querySelectorAll('.ZoneExpression').forEach(n => n.remove());   /* expressions : déjà dans les définitions */
+
+  /* un indicateur n'est gardé que s'il annonce une traduction : les sous-sens
+     dont tout le contenu tenait dans les expressions retirées laissent une étiquette seule */
+  const line = el('p', 'tr');
+  let pending = [];
+  src.querySelectorAll('.Indicateur, .IndicateurDomaine, .Metalangue, .Traduction').forEach(n => {
+    if (cls(n).includes('Traduction')) {
+      pending.forEach(p => line.appendChild(p));
+      pending = [];
+      tradChip(n, line, to);
+      return;
+    }
+    const txt = clean(n.textContent);
+    if (txt) pending.push(el('span', 'indic', txt));
+  });
+  /* « (très familier) » porté à la fois par le sens et par chaque traduction */
+  const seen = new Set();
+  Array.from(line.querySelectorAll('.indic')).forEach(n => {
+    if (seen.has(n.textContent)) n.remove(); else seen.add(n.textContent);
+  });
+
+  if (line.querySelector('.chip')) host.appendChild(line);
+}
+
+function renderTrad(doc, w, to) {
+  if (!doc) return null;
+
+  const zones = Array.from(doc.querySelectorAll('.article_bilingue .ZoneEntree'));
+  const same = z => {
+    const a = z.querySelector('.Adresse');
+    return a && clean(a.textContent).toLowerCase() === w.toLowerCase();
+  };
+  /* « book in », « books » : entrées voisines, écartées si le mot cherché a les siennes */
+  const kept = zones.some(same) ? zones.filter(same) : zones;
+
+  const sec = el('section', 'blk trad');
+  sec.appendChild(el('h2', null, T().trad));
+
+  kept.forEach(zone => {
+    const texte = zone.nextElementSibling;
+    if (!texte || !cls(texte).includes('ZoneTexte')) return;
+    const senses = texte.querySelectorAll('li.itemZONESEM');
+    const box = el('div');
+    /* une entrée à sens unique n'a pas de liste : les traductions pendent de la zone */
+    if (senses.length) senses.forEach(li => tradSense(li, box, to));
+    else tradSense(texte, box, to);
+    if (!box.childNodes.length) return;
+
+    const cat = catText(zone.querySelector('.CategorieGrammaticale'));
+    if (cat) sec.appendChild(el('p', 'cat', cat));
+    while (box.firstChild) sec.appendChild(box.firstChild);
+  });
+
+  return sec.querySelector('.tr') ? sec : null;
 }
 
 /* ---------- source anglaise : dictionaryapi.dev (JSON) ---------- */
@@ -566,16 +681,26 @@ function enEntry(e) {
 }
 
 async function enFetch(w) {
-  const r = await fetch(EN_API + encodeURIComponent(w), { credentials: 'omit' });
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const trad = fetchTrad('en', w);                 /* en parallèle de la définition */
 
-  const data = await r.json();
-  if (!Array.isArray(data) || !data.length) return null;
+  let data = null, down = false;
+  try {
+    const r = await fetch(EN_API + encodeURIComponent(w), { credentials: 'omit' });
+    if (r.ok) data = await r.json();
+    else if (r.status !== 404) down = true;        /* l'API rend 502 sur certains mots */
+  } catch (e) { down = true; }
+
+  const entries = Array.isArray(data) ? data : [];
+  const sec = renderTrad(await trad, w, TRAD.en.to);
+  /* la traduction seule vaut mieux qu'une page d'erreur */
+  if (!entries.length && !sec) { if (down) throw new Error('source indisponible'); return null; }
 
   return {
-    lemma: clean(data[0].word) || w,
-    render(box) { data.forEach(e => box.appendChild(enEntry(e))); }
+    lemma: clean((entries[0] || {}).word) || w,
+    render(box) {
+      if (sec) box.appendChild(sec);
+      entries.forEach(e => box.appendChild(enEntry(e)));
+    }
   };
 }
 
@@ -771,32 +896,41 @@ async function esPage(w) {
 }
 
 async function esFetch(w) {
+  const trad = fetchTrad('es', w);                 /* en parallèle de la définition */
+
   /* le wiktionnaire distingue la casse : « Casa » n'existe pas, « casa » oui */
   const low = w.toLocaleLowerCase('es');
   const cap = low.charAt(0).toLocaleUpperCase('es') + low.slice(1);
   const tries = [];
   [w, low, cap].forEach(v => { if (v && !tries.includes(v)) tries.push(v); });
 
-  for (const v of tries) {
-    const page = await esPage(v);
-    if (!page) continue;
-    const parsed = esParse(new DOMParser().parseFromString(page.text, 'text/html'));
-    if (!parsed) continue;
+  let parsed = null, lemma = w, down = false;
+  try {
+    for (const v of tries) {
+      const page = await esPage(v);
+      if (!page) continue;
+      parsed = esParse(new DOMParser().parseFromString(page.text, 'text/html'));
+      if (parsed) { lemma = clean(page.title) || v; break; }
+    }
+  } catch (e) { down = true; }
 
-    const lemma = clean(page.title) || v;
-    return {
-      lemma,
-      render(box) {
-        LINKWORD = esWordFromHref;
-        parsed.entries.forEach(e => box.appendChild(esEntry(e, lemma)));
-        parsed.blocks.forEach(b => {
-          const sec = esLocutions(b);
-          if (sec) box.appendChild(sec);
-        });
-      }
-    };
-  }
-  return null;
+  const sec = renderTrad(await trad, w, TRAD.es.to);
+  /* la traduction seule vaut mieux qu'une page d'erreur */
+  if (!parsed && !sec) { if (down) throw new Error('source indisponible'); return null; }
+
+  return {
+    lemma,
+    render(box) {
+      if (sec) box.appendChild(sec);
+      if (!parsed) return;
+      LINKWORD = esWordFromHref;
+      parsed.entries.forEach(e => box.appendChild(esEntry(e, lemma)));
+      parsed.blocks.forEach(b => {
+        const bloc = esLocutions(b);
+        if (bloc) box.appendChild(bloc);
+      });
+    }
+  };
 }
 
 const SOURCES = { fr: frFetch, en: enFetch, es: esFetch };
@@ -889,6 +1023,12 @@ function go(w) {
   history.pushState({ m: w, l: lang }, '', '#' + lang + '/' + encodeURIComponent(w));
   back.classList.add('on');
   show(w);
+}
+
+/* Suivre un mot dans une autre langue : une traduction ouvre le dictionnaire français. */
+function goIn(l, w) {
+  if (l !== lang) setLang(l, false);
+  go(w);
 }
 
 /* ---------- langue ---------- */
