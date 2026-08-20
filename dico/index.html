@@ -56,6 +56,26 @@ button.go{
   flex:0 0 auto; height:44px; padding:0 16px; border:0; border-radius:12px;
   background:var(--accent); color:#fff; font-size:16px; font-weight:600; cursor:pointer;
 }
+button.flag{
+  flex:0 0 auto; width:44px; height:44px; padding:0; cursor:pointer;
+  border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--fg);
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; line-height:1; font-family:inherit; font-weight:600;
+}
+button.flag:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+#menu{
+  position:absolute; z-index:20; top:100%; right:16px; margin-top:6px; min-width:190px; padding:6px;
+  background:var(--bg); border:1px solid var(--line); border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);
+}
+#menu[hidden]{display:none}
+#menu button{
+  display:flex; align-items:center; gap:10px; width:100%; height:40px; padding:0 10px;
+  border:0; border-radius:8px; background:none; color:var(--fg);
+  font:inherit; font-size:16px; text-align:left; cursor:pointer;
+}
+#menu button[aria-current=true]{background:var(--accent-bg); color:var(--accent); font-weight:600}
+#menu .fg{font-size:20px; line-height:1; width:24px; text-align:center}
 main{max-width:720px; margin:0 auto; padding:16px 16px 64px}
 
 .note{color:var(--muted); font-size:14px; margin:0 0 14px}
@@ -135,9 +155,11 @@ section.blk>h2{
       <input id="q" type="search" name="q" placeholder="Chercher un mot"
              autocapitalize="off" autocorrect="off" autocomplete="off"
              spellcheck="false" enterkeyhint="search">
+      <button id="lang" class="flag" type="button" aria-haspopup="true" aria-expanded="false"></button>
       <button class="go" type="submit">OK</button>
     </form>
   </div>
+  <div id="menu" role="menu" hidden></div>
 </header>
 
 <main id="out"></main>
@@ -151,12 +173,59 @@ const PROXY = '';
 const BASE = 'https://www.larousse.fr';
 const DEF  = BASE + '/dictionnaires/francais/';
 const SYN  = BASE + '/dictionnaires/synonymes/';
-const HIST_KEY = 'dic.hist';
-const HIST_MAX = 15;
+const EN_API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
+const ES_API = 'https://es.wiktionary.org/w/api.php';
 
-const out   = document.getElementById('out');
-const input = document.getElementById('q');
-const back  = document.getElementById('back');
+const HIST_MAX  = 15;
+const LANG_KEY  = 'dic.lang';
+
+/* Une langue = un drapeau, une source, des textes d'interface. */
+const LANGS = {
+  fr: {
+    flag: '\u{1F1EB}\u{1F1F7}', name: 'Français', code: 'fr', src: 'Larousse',
+    t: {
+      title:'Dictionnaire', ph:'Chercher un mot', back:'Retour', pick:'Langue',
+      home:'Un mot, sa définition, ses synonymes.', recent:'Recherches récentes',
+      offline: s => 'Pas de réseau, ou ' + s + ' est injoignable.', retry:'Réessayer',
+      none: w => 'Aucune entrée pour « ' + w + ' ».',
+      syn:'Synonymes et contraires', expr:'Expressions', homo:'Homonymes',
+      synonyms:'Synonymes', antonyms:'Contraires'
+    }
+  },
+  en: {
+    flag: '\u{1F1EC}\u{1F1E7}', name: 'English', code: 'en', src: 'DictionaryAPI',
+    t: {
+      title:'Dictionary', ph:'Search for a word', back:'Back', pick:'Language',
+      home:'A word, its definition, its synonyms.', recent:'Recent searches',
+      offline: s => 'No network, or ' + s + ' is unreachable.', retry:'Retry',
+      none: w => 'No entry for “' + w + '”.',
+      syn:'Synonyms and antonyms', expr:'Expressions', homo:'Homonyms',
+      synonyms:'Synonyms', antonyms:'Antonyms'
+    }
+  },
+  es: {
+    flag: '\u{1F1EA}\u{1F1F8}', name: 'Español', code: 'es', src: 'Wikcionario',
+    t: {
+      title:'Diccionario', ph:'Buscar una palabra', back:'Volver', pick:'Idioma',
+      home:'Una palabra, su definición, sus sinónimos.', recent:'Búsquedas recientes',
+      offline: s => 'Sin red, o ' + s + ' no responde.', retry:'Reintentar',
+      none: w => 'No hay entrada para «' + w + '».',
+      syn:'Sinónimos y antónimos', expr:'Expresiones', homo:'Homónimos',
+      synonyms:'Sinónimos', antonyms:'Antónimos'
+    }
+  }
+};
+
+let lang = 'fr';          /* langue courante */
+let word = '';            /* mot affiché, '' sur l'accueil */
+
+const T = () => LANGS[lang].t;
+
+const out     = document.getElementById('out');
+const input   = document.getElementById('q');
+const back    = document.getElementById('back');
+const langBtn = document.getElementById('lang');
+const menu    = document.getElementById('menu');
 
 /* ---------- utilitaires DOM ---------- */
 
@@ -190,6 +259,13 @@ function wordFromPath(path) {
 
 /* ---------- rendu sûr du HTML tiers (jamais d'innerHTML) ---------- */
 
+/* Éléments décoratifs des pages sources, jamais rendus. */
+const SKIP_TAGS  = /^(audio|script|style|img|figure|table|input)$/;
+const SKIP_CLASS = /linkaudio|mw-editsection|reference|ext-phonos|mw-file|cite-bracket/;
+
+/* Résolveur « href -> mot cliquable », remplacé par la source active. */
+let LINKWORD = wordFromPath;
+
 function inline(src, dst) {
   for (const n of src.childNodes) {
     if (n.nodeType === 3) { dst.appendChild(document.createTextNode(n.nodeValue.replace(/ /g, ' '))); continue; }
@@ -197,10 +273,10 @@ function inline(src, dst) {
 
     const tag = n.tagName.toLowerCase();
     const c = cls(n);
-    if (tag === 'audio' || tag === 'script' || tag === 'style' || c.includes('linkaudio')) continue;
+    if (SKIP_TAGS.test(tag) || SKIP_CLASS.test(c)) continue;
 
     if (tag === 'a') {
-      const w = wordFromPath(n.getAttribute('href') || '');
+      const w = LINKWORD(n.getAttribute('href') || '');
       if (w) { dst.appendChild(link(clean(n.textContent), w)); continue; }
     }
 
@@ -364,7 +440,7 @@ function renderSynDoc(doc) {
   if (!rows.length) return null;
 
   const sec = el('section', 'blk');
-  sec.appendChild(el('h2', null, 'Synonymes et contraires'));
+  sec.appendChild(el('h2', null, T().syn));
   rows.forEach(r => sec.appendChild(r));
   return sec;
 }
@@ -373,7 +449,7 @@ function renderLocutions(doc) {
   const items = doc.querySelectorAll('article.BlocLocutions li.Locution');
   if (!items.length) return null;
   const sec = el('section', 'blk');
-  sec.appendChild(el('h2', null, 'Expressions'));
+  sec.appendChild(el('h2', null, T().expr));
   items.forEach(li => {
     const dl = el('dl', 'loc');
     const dt = el('dt'), dd = el('dd');
@@ -391,7 +467,7 @@ function renderHomonymes(doc) {
   const items = doc.querySelectorAll('article.Blochomonymes li.Homonyme');
   if (!items.length) return null;
   const sec = el('section', 'blk');
-  sec.appendChild(el('h2', null, 'Homonymes'));
+  sec.appendChild(el('h2', null, T().homo));
   items.forEach(li => {
     const p = el('p', 'homo');
     const cg = li.querySelector('.CatGramHomonyme');
@@ -407,24 +483,352 @@ function renderHomonymes(doc) {
   return sec;
 }
 
+/* ---------- source française : Larousse ---------- */
+
+async function frFetch(w) {
+  const main = await fetchDoc(DEF + encodeURIComponent(w));
+  if (notFound(main.doc)) return null;
+
+  const lemma = wordFromPath(main.url) || w;
+  let synBox = null;
+
+  return {
+    lemma,
+    render(box) {
+      LINKWORD = wordFromPath;
+      parseEntries(main.doc).forEach(e => box.appendChild(renderEntry(e)));
+
+      /* les synonymes arrivent après : ils ne doivent pas retarder les définitions */
+      synBox = el('div');
+      box.appendChild(synBox);
+
+      const loc = renderLocutions(main.doc); if (loc) box.appendChild(loc);
+      const hom = renderHomonymes(main.doc); if (hom) box.appendChild(hom);
+    },
+    async more(alive) {
+      try {
+        let syn = await fetchDoc(SYN + encodeURIComponent(w));
+        if (notFound(syn.doc) && lemma !== w) syn = await fetchDoc(SYN + encodeURIComponent(lemma));
+        if (!alive() || notFound(syn.doc)) return;
+        LINKWORD = wordFromPath;
+        const sec = renderSynDoc(syn.doc);
+        if (sec) synBox.appendChild(sec);
+      } catch (e) { /* non bloquant : les synonymes par sens sont déjà affichés */ }
+    }
+  };
+}
+
+/* ---------- source anglaise : dictionaryapi.dev (JSON) ---------- */
+
+function enChips(words, label, host) {
+  const list = (words || []).filter(Boolean);
+  if (!list.length) return;
+  const wrap = el('div', 'syn' + (label === T().antonyms ? ' contra' : ''));
+  wrap.appendChild(el('span', 'lbl', label));
+  list.forEach(w => {
+    const b = el('button', 'chip', w);
+    b.type = 'button';
+    b.addEventListener('click', () => go(w));
+    wrap.appendChild(b);
+  });
+  host.appendChild(wrap);
+}
+
+function enEntry(e) {
+  const box = el('article', 'entry');
+  box.appendChild(el('h1', null, e.word));
+
+  const phon = e.phonetic || (e.phonetics || []).map(p => p.text).filter(Boolean)[0];
+  if (phon) box.appendChild(el('p', 'orig', phon));
+
+  (e.meanings || []).forEach(m => {
+    if (m.partOfSpeech) box.appendChild(el('p', 'cat', m.partOfSpeech));
+
+    const list = el('ol', 'senses');
+    (m.definitions || []).forEach((d, i) => {
+      if (!d.definition) return;
+      const item = el('li');
+      item.appendChild(el('span', 'num', String(i + 1)));
+      item.appendChild(el('p', 'def', d.definition));
+      if (d.example) item.appendChild(el('em', 'ex', d.example));
+      enChips(d.synonyms, T().synonyms, item);
+      enChips(d.antonyms, T().antonyms, item);
+      list.appendChild(item);
+    });
+    if (list.childNodes.length) box.appendChild(list);
+
+    const extra = el('div');
+    enChips(m.synonyms, T().synonyms, extra);
+    enChips(m.antonyms, T().antonyms, extra);
+    if (extra.childNodes.length) box.appendChild(extra);
+  });
+  return box;
+}
+
+async function enFetch(w) {
+  const r = await fetch(EN_API + encodeURIComponent(w), { credentials: 'omit' });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+
+  const data = await r.json();
+  if (!Array.isArray(data) || !data.length) return null;
+
+  return {
+    lemma: clean(data[0].word) || w,
+    render(box) { data.forEach(e => box.appendChild(enEntry(e))); }
+  };
+}
+
+/* ---------- source espagnole : es.wiktionary (HTML) ---------- */
+
+/* Rubriques du wiktionnaire qui ne portent pas de définitions. */
+const ES_META = /^(traducc|v[eé]ase|informaci|referenc|conjugaci|anagram|similar|nota|derivad|compuest|pronunciaci|forma flexiva|hiper|hip[oó]|mer[oó]|hol[oó]|relacionad|ant[oó]|sin[oó]|cita|descend|abreviatur|categor)/;
+
+/* /wiki/mot#Español -> « mot » ; liens rouges, externes et espaces de noms exclus. */
+function esWordFromHref(href) {
+  if (!/^\/wiki\//.test(href || '')) return '';
+  let w = href.slice(6).split('#')[0];
+  try { w = decodeURIComponent(w); } catch (e) { /* déjà décodé */ }
+  w = clean(w.replace(/_/g, ' '));
+  return w.includes(':') ? '' : w;
+}
+
+function esHeading(node) {
+  if (/^H[2-6]$/.test(node.tagName)) return node;
+  return cls(node).includes('mw-heading') ? node.querySelector('h2,h3,h4,h5,h6') : null;
+}
+
+function esText(node) {
+  const c = node.cloneNode(true);
+  c.querySelectorAll('.mw-editsection').forEach(n => n.remove());
+  return clean(c.textContent);
+}
+
+/* Les définitions d'un <dl> : <dt>3 Rubrique</dt><dd>sens + précisions</dd> */
+function esSenses(dl, entry) {
+  let sense = null;
+  for (const kid of dl.children) {
+    if (kid.tagName === 'DT') {
+      const m = esText(kid).match(/^(\d+)\s*(.*)$/);
+      sense = { num: m ? m[1] : '', rub: m ? m[2] : esText(kid), bodies: [], items: [] };
+      entry.senses.push(sense);
+      continue;
+    }
+    if (kid.tagName !== 'DD') continue;
+
+    if (!sense) {                                   /* <dd> isolé : suite du sens précédent */
+      sense = entry.senses[entry.senses.length - 1];
+      if (!sense) { sense = { num: '', rub: '', bodies: [], items: [] }; entry.senses.push(sense); }
+    }
+    const lists = Array.from(kid.querySelectorAll(':scope > ul'));
+    const body = document.createElement('div');
+    for (const n of kid.childNodes) {
+      if (lists.includes(n)) continue;
+      body.appendChild(n.cloneNode(true));
+    }
+    if (clean(body.textContent)) sense.bodies.push(body);
+    lists.forEach(ul => ul.querySelectorAll(':scope > li').forEach(li => sense.items.push(li)));
+  }
+}
+
+function esParse(doc) {
+  const root = doc.querySelector('.mw-parser-output');
+  if (!root) return null;
+
+  const entries = [], blocks = [];
+  let inEs = false, mode = null, cur = null, ety = null;
+
+  for (const node of root.children) {
+    const h = esHeading(node);
+    if (h) {
+      const text = esText(h);
+      if (h.tagName === 'H2') { inEs = /^español$/i.test(text); mode = null; cur = null; ety = null; continue; }
+      if (!inEs) continue;
+
+      const key = text.toLowerCase().replace(/\s*\d+$/, '').trim();
+      cur = null;
+      if (/^etimolog/.test(key))                     { mode = 'ety'; ety = null; continue; }
+      if (/^(locucion|refran|expresion|frases)/.test(key)) { mode = 'loc'; blocks.push({ title: text, items: [] }); continue; }
+      if (ES_META.test(key))                         { mode = null; continue; }
+
+      cur = { cat: text, head: null, ety, senses: [] };
+      entries.push(cur);
+      mode = 'entry';
+      continue;
+    }
+    if (!inEs) continue;
+
+    if (mode === 'ety') { if (!ety && node.tagName === 'P') ety = node; continue; }
+    if (mode === 'loc') { const b = blocks[blocks.length - 1]; node.querySelectorAll('li').forEach(li => b.items.push(li)); continue; }
+    if (mode !== 'entry' || !cur) continue;
+
+    if (node.tagName === 'P' && !cur.head && !cur.senses.length) { cur.head = node; continue; }
+    if (node.tagName === 'DL') esSenses(node, cur);
+  }
+
+  const kept = entries.filter(e => e.senses.length);
+  if (!kept.length) return null;
+  return { entries: kept, blocks: blocks.filter(b => b.items.length) };
+}
+
+/* « Sinónimos: a, b, c. » -> pastilles ; « Ejemplo: … » -> ligne en italique. */
+function esItem(li, host) {
+  const lbl = li.querySelector(':scope > b');
+  const label = lbl ? esText(lbl).replace(/\s*:\s*$/, '') : '';
+
+  const rest = document.createElement('div');
+  for (const n of li.childNodes) {
+    if (n === lbl) continue;
+    rest.appendChild(n.cloneNode(true));
+  }
+
+  const links = rest.querySelectorAll('a');
+  if (label && links.length && /^(sin[oó]nimo|ant[oó]nimo|hip[eoó]|mer[oó]|hol[oó]|relacionad|derivad|coordinad)/i.test(label)) {
+    const wrap = el('div', 'syn' + (/^ant[oó]/i.test(label) ? ' contra' : ''));
+    wrap.appendChild(el('span', 'lbl', label));
+    links.forEach(a => {
+      const txt = clean(a.textContent).replace(/[.,;]+$/, '');
+      if (!txt) return;
+      const w = esWordFromHref(a.getAttribute('href') || '');
+      if (!w) { wrap.appendChild(el('span', 'chip', txt)); return; }
+      const b = el('button', 'chip', txt);
+      b.type = 'button';
+      b.addEventListener('click', () => go(w));
+      wrap.appendChild(b);
+    });
+    host.appendChild(wrap);
+    return;
+  }
+
+  const line = el('em', 'ex');
+  if (lbl) line.appendChild(el('b', null, esText(lbl) + ' '));
+  inline(rest, line);
+  if (clean(line.textContent)) host.appendChild(line);
+}
+
+function esSense(sense) {
+  const item = el('li');
+  item.appendChild(el('span', 'num', sense.num || '•'));
+  if (sense.rub) item.appendChild(el('span', 'rub', sense.rub));
+  sense.bodies.forEach(b => {
+    const p = el('p', 'def');
+    inline(b, p);
+    if (clean(p.textContent)) item.appendChild(p);
+  });
+  sense.items.forEach(li => esItem(li, item));
+  return item;
+}
+
+function esEntry(e, title) {
+  const box = el('article', 'entry');
+  box.appendChild(el('h1', null, title));
+  box.appendChild(el('p', 'cat', e.cat));
+
+  if (e.head) { const p = el('p', 'orig'); inline(e.head, p); if (clean(p.textContent)) box.appendChild(p); }
+  if (e.ety)  { const p = el('p', 'orig'); inline(e.ety, p);  if (clean(p.textContent)) box.appendChild(p); }
+
+  const list = el('ol', 'senses');
+  e.senses.forEach(sense => list.appendChild(esSense(sense)));
+  box.appendChild(list);
+  return box;
+}
+
+/* « perro bravo: perro de carácter agresivo. » -> terme + glose */
+function esLocutions(block) {
+  const sec = el('section', 'blk');
+  sec.appendChild(el('h2', null, block.title));
+  block.items.forEach(li => {
+    const dt = el('dt'), dd = el('dd');
+    let target = dt;
+    for (const n of li.childNodes) {
+      if (target === dt && n.nodeType === 3 && n.nodeValue.includes(':')) {
+        const cut = n.nodeValue.indexOf(':');
+        dt.appendChild(document.createTextNode(n.nodeValue.slice(0, cut)));
+        target = dd;
+        dd.appendChild(document.createTextNode(n.nodeValue.slice(cut + 1)));
+        continue;
+      }
+      const holder = document.createElement('div');
+      holder.appendChild(n.cloneNode(true));
+      inline(holder, target);
+    }
+    dt.textContent = clean(dt.textContent);
+    if (!dt.textContent) return;
+    const dl = el('dl', 'loc');
+    dl.appendChild(dt);
+    if (clean(dd.textContent)) { dd.textContent = clean(dd.textContent); dl.appendChild(dd); }
+    sec.appendChild(dl);
+  });
+  return sec.querySelectorAll('dl').length ? sec : null;
+}
+
+async function esPage(w) {
+  const q = '?action=parse&prop=text&formatversion=2&format=json&origin=*&redirects=1&page=';
+  const r = await fetch(ES_API + q + encodeURIComponent(w), { credentials: 'omit' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  return data.error ? null : data.parse;      /* missingtitle : page absente */
+}
+
+async function esFetch(w) {
+  /* le wiktionnaire distingue la casse : « Casa » n'existe pas, « casa » oui */
+  const low = w.toLocaleLowerCase('es');
+  const cap = low.charAt(0).toLocaleUpperCase('es') + low.slice(1);
+  const tries = [];
+  [w, low, cap].forEach(v => { if (v && !tries.includes(v)) tries.push(v); });
+
+  for (const v of tries) {
+    const page = await esPage(v);
+    if (!page) continue;
+    const parsed = esParse(new DOMParser().parseFromString(page.text, 'text/html'));
+    if (!parsed) continue;
+
+    const lemma = clean(page.title) || v;
+    return {
+      lemma,
+      render(box) {
+        LINKWORD = esWordFromHref;
+        parsed.entries.forEach(e => box.appendChild(esEntry(e, lemma)));
+        parsed.blocks.forEach(b => {
+          const sec = esLocutions(b);
+          if (sec) box.appendChild(sec);
+        });
+      }
+    };
+  }
+  return null;
+}
+
+const SOURCES = { fr: frFetch, en: enFetch, es: esFetch };
+
 /* ---------- historique ---------- */
 
-const readHist = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch (e) { return []; } };
-function pushHist(word) {
-  const h = readHist().filter(w => w !== word);
-  h.unshift(word);
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, HIST_MAX))); } catch (e) {}
+const histKey = () => 'dic.hist.' + lang;
+
+(function migrate() {                            /* ancien historique, français */
+  try {
+    const old = localStorage.getItem('dic.hist');
+    if (old && !localStorage.getItem('dic.hist.fr')) localStorage.setItem('dic.hist.fr', old);
+    if (old) localStorage.removeItem('dic.hist');
+  } catch (e) {}
+})();
+
+const readHist = () => { try { return JSON.parse(localStorage.getItem(histKey())) || []; } catch (e) { return []; } };
+function pushHist(w) {
+  const h = readHist().filter(x => x !== w);
+  h.unshift(w);
+  try { localStorage.setItem(histKey(), JSON.stringify(h.slice(0, HIST_MAX))); } catch (e) {}
 }
 
 function renderHome() {
   out.textContent = '';
   const h = readHist();
   const msg = el('div', 'msg');
-  msg.appendChild(el('p', null, 'Un mot, sa définition, ses synonymes.'));
+  msg.appendChild(el('p', null, T().home));
   out.appendChild(msg);
   if (!h.length) return;
   const sec = el('section', 'blk hist');
-  sec.appendChild(el('h2', null, 'Recherches récentes'));
+  sec.appendChild(el('h2', null, T().recent));
   h.forEach(w => {
     const b = el('button', 'chip', w);
     b.type = 'button';
@@ -438,76 +842,103 @@ function renderHome() {
 
 let seq = 0;
 
-async function show(word) {
+function message(nodes) {
+  out.textContent = '';
+  const m = el('div', 'msg');
+  nodes.forEach(n => m.appendChild(n));
+  out.appendChild(m);
+}
+
+async function show(w) {
   const my = ++seq;
-  input.value = word;
+  word = w;
+  input.value = w;
   input.blur();
   out.textContent = '';
   out.appendChild(el('div', 'spin'));
   window.scrollTo(0, 0);
 
-  let main;
+  const asked = lang;
+  let res;
   try {
-    main = await fetchDoc(DEF + encodeURIComponent(word));
+    res = await SOURCES[asked](w);
   } catch (e) {
     if (my !== seq) return;
-    out.textContent = '';
-    const m = el('div', 'msg');
-    m.appendChild(el('p', null, 'Pas de réseau, ou Larousse est injoignable.'));
-    const b = el('button', null, 'Réessayer');
+    const b = el('button', null, T().retry);
     b.type = 'button';
-    b.addEventListener('click', () => show(word));
-    m.appendChild(b);
-    out.appendChild(m);
+    b.addEventListener('click', () => show(w));
+    message([el('p', null, T().offline(LANGS[asked].src)), b]);
     return;
   }
   if (my !== seq) return;
 
-  if (notFound(main.doc)) {
-    out.textContent = '';
-    const m = el('div', 'msg');
-    m.appendChild(el('p', null, 'Aucune entrée pour « ' + word + ' ».'));
-    out.appendChild(m);
-    return;
-  }
+  if (!res) { message([el('p', null, T().none(w))]); return; }
 
-  const lemma = wordFromPath(main.url) || word;
-  pushHist(lemma);
-
+  pushHist(res.lemma);
   out.textContent = '';
-  if (lemma.toLowerCase() !== word.toLowerCase()) {
-    out.appendChild(el('p', 'note', word + ' → ' + lemma));
+  if (res.lemma.toLowerCase() !== w.toLowerCase()) {
+    out.appendChild(el('p', 'note', w + ' → ' + res.lemma));
   }
-
-  const entries = parseEntries(main.doc);
-  entries.forEach(e => out.appendChild(renderEntry(e)));
-
-  const later = [];
-  const loc = renderLocutions(main.doc); if (loc) later.push(loc);
-  const hom = renderHomonymes(main.doc); if (hom) later.push(hom);
-
-  /* les synonymes arrivent après : ils ne doivent pas retarder les définitions */
-  const synBox = el('div');
-  out.appendChild(synBox);
-  later.forEach(s => out.appendChild(s));
-
-  try {
-    let s = await fetchDoc(SYN + encodeURIComponent(word));
-    if (notFound(s.doc) && lemma !== word) s = await fetchDoc(SYN + encodeURIComponent(lemma));
-    if (my !== seq) return;
-    if (!notFound(s.doc)) {
-      const sec = renderSynDoc(s.doc);
-      if (sec) synBox.appendChild(sec);
-    }
-  } catch (e) { /* non bloquant : les synonymes par sens sont déjà affichés */ }
+  res.render(out);
+  if (res.more) res.more(() => my === seq);
 }
 
-function go(word) {
-  word = clean(word);
-  if (!word) return;
-  history.pushState({ m: word }, '', '#' + encodeURIComponent(word));
+function go(w) {
+  w = clean(w);
+  if (!w) return;
+  history.pushState({ m: w, l: lang }, '', '#' + lang + '/' + encodeURIComponent(w));
   back.classList.add('on');
-  show(word);
+  show(w);
+}
+
+/* ---------- langue ---------- */
+
+function setLang(code, navigate) {
+  lang = LANGS[code] ? code : 'fr';
+  try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+
+  const L = LANGS[lang];
+  document.documentElement.lang = L.code;
+  document.title = L.t.title;
+  input.placeholder = L.t.ph;
+  back.setAttribute('aria-label', L.t.back);
+  langBtn.textContent = L.flag;
+  langBtn.setAttribute('aria-label', L.t.pick + ' : ' + L.name);
+  Array.from(menu.children).forEach(b => b.setAttribute('aria-current', b.dataset.l === lang ? 'true' : 'false'));
+
+  if (!navigate) return;
+  if (word) go(word); else { seq++; renderHome(); }
+}
+
+function openMenu(on) {
+  menu.hidden = !on;
+  langBtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+}
+
+Object.keys(LANGS).forEach(code => {
+  const b = el('button');
+  b.type = 'button';
+  b.dataset.l = code;
+  b.setAttribute('role', 'menuitemradio');
+  b.appendChild(el('span', 'fg', LANGS[code].flag));
+  b.appendChild(el('span', null, LANGS[code].name));
+  b.addEventListener('click', () => { openMenu(false); langBtn.focus(); setLang(code, true); });
+  menu.appendChild(b);
+});
+
+langBtn.addEventListener('click', ev => { ev.stopPropagation(); openMenu(menu.hidden); });
+document.addEventListener('click', ev => { if (!menu.hidden && !menu.contains(ev.target)) openMenu(false); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') openMenu(false); });
+
+/* ---------- navigation ---------- */
+
+/* #es/casa : langue + mot ; #casa : ancien format, langue courante */
+function readHash() {
+  const raw = location.hash.slice(1);
+  const dec = v => { try { return clean(decodeURIComponent(v)); } catch (e) { return clean(v); } };
+  const cut = raw.indexOf('/');
+  const head = cut > 0 ? raw.slice(0, cut) : '';
+  return LANGS[head] ? { lang: head, word: dec(raw.slice(cut + 1)) } : { lang: null, word: dec(raw) };
 }
 
 document.getElementById('f').addEventListener('submit', ev => {
@@ -518,14 +949,18 @@ document.getElementById('f').addEventListener('submit', ev => {
 back.addEventListener('click', () => history.back());
 
 window.addEventListener('popstate', () => {
-  const w = clean(decodeURIComponent(location.hash.slice(1)));
-  if (w) { show(w); } else { seq++; input.value = ''; renderHome(); }
-  back.classList.toggle('on', !!w);
+  const h = readHash();
+  if (h.lang && h.lang !== lang) setLang(h.lang, false);
+  if (h.word) { show(h.word); } else { seq++; word = ''; input.value = ''; renderHome(); }
+  back.classList.toggle('on', !!h.word);
 });
 
 (function start() {
-  const w = location.hash ? clean(decodeURIComponent(location.hash.slice(1))) : '';
-  if (w) { back.classList.add('on'); show(w); }
+  let saved = null;
+  try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+  const h = readHash();
+  setLang(h.lang || saved || 'fr', false);
+  if (h.word) { back.classList.add('on'); show(h.word); }
   else renderHome();
 })();
 </script>
