@@ -46,12 +46,22 @@ header{
 }
 #back.on{display:block}
 form{flex:1 1 auto; display:flex; gap:8px; margin:0}
+.field{flex:1 1 auto; min-width:0; position:relative; display:flex}
 input[type=search]{
-  flex:1 1 auto; min-width:0; height:44px; padding:0 14px;
+  flex:1 1 auto; min-width:0; height:44px; padding:0 44px 0 14px;
   font-size:17px; color:var(--fg); background:var(--card);
   border:1px solid var(--line); border-radius:12px; -webkit-appearance:none; appearance:none;
 }
 input[type=search]:focus{outline:none; border-color:var(--accent)}
+input[type=search]::-webkit-search-cancel-button{display:none}
+.paste{
+  position:absolute; right:4px; top:4px; width:36px; height:36px; padding:0;
+  border:0; border-radius:10px; background:transparent; color:var(--muted); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.paste[hidden]{display:none}
+.paste:active{color:var(--accent); background:var(--chip)}
+.paste:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
 button.go{
   flex:0 0 auto; height:44px; padding:0 16px; border:0; border-radius:12px;
   background:var(--accent); color:#fff; font-size:16px; font-weight:600; cursor:pointer;
@@ -159,9 +169,19 @@ section.blk>h2{
   <div class="bar">
     <button id="back" type="button" aria-label="Retour">&#8592;</button>
     <form id="f">
-      <input id="q" type="search" name="q" placeholder="Chercher un mot"
-             autocapitalize="off" autocorrect="off" autocomplete="off"
-             spellcheck="false" enterkeyhint="search">
+      <div class="field">
+        <input id="q" type="search" name="q" placeholder="Chercher un mot"
+               autocapitalize="off" autocorrect="on" autocomplete="on"
+               spellcheck="true" enterkeyhint="search">
+        <button id="paste" class="paste" type="button" aria-label="Coller" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/>
+            <path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H16"/>
+          </svg>
+        </button>
+      </div>
       <button id="lang" class="flag" type="button" aria-haspopup="true" aria-expanded="false"></button>
       <button class="go" type="submit">OK</button>
     </form>
@@ -196,7 +216,7 @@ const LANGS = {
   fr: {
     flag: '\u{1F1EB}\u{1F1F7}', name: 'Français', code: 'fr', src: 'Larousse',
     t: {
-      title:'Dictionnaire', ph:'Chercher un mot', back:'Retour', pick:'Langue',
+      title:'Dictionnaire', ph:'Chercher un mot', back:'Retour', pick:'Langue', paste:'Coller',
       home:'Un mot, sa définition, ses synonymes.', recent:'Recherches récentes',
       offline: s => 'Pas de réseau, ou ' + s + ' est injoignable.', retry:'Réessayer',
       none: w => 'Aucune entrée pour « ' + w + ' ».',
@@ -207,7 +227,7 @@ const LANGS = {
   en: {
     flag: '\u{1F1EC}\u{1F1E7}', name: 'English', code: 'en', src: 'DictionaryAPI',
     t: {
-      title:'Dictionary', ph:'Search for a word', back:'Back', pick:'Language',
+      title:'Dictionary', ph:'Search for a word', back:'Back', pick:'Language', paste:'Paste',
       home:'A word, its definition, its synonyms.', recent:'Recent searches',
       offline: s => 'No network, or ' + s + ' is unreachable.', retry:'Retry',
       none: w => 'No entry for “' + w + '”.',
@@ -218,7 +238,7 @@ const LANGS = {
   es: {
     flag: '\u{1F1EA}\u{1F1F8}', name: 'Español', code: 'es', src: 'Wikcionario',
     t: {
-      title:'Diccionario', ph:'Buscar una palabra', back:'Volver', pick:'Idioma',
+      title:'Diccionario', ph:'Buscar una palabra', back:'Volver', pick:'Idioma', paste:'Pegar',
       home:'Una palabra, su definición, sus sinónimos.', recent:'Búsquedas recientes',
       offline: s => 'Sin red, o ' + s + ' no responde.', retry:'Reintentar',
       none: w => 'No hay entrada para «' + w + '».',
@@ -237,6 +257,7 @@ const out     = document.getElementById('out');
 const input   = document.getElementById('q');
 const back    = document.getElementById('back');
 const langBtn = document.getElementById('lang');
+const pasteBtn= document.getElementById('paste');
 const menu    = document.getElementById('menu');
 
 /* ---------- utilitaires DOM ---------- */
@@ -1044,6 +1065,8 @@ function setLang(code, navigate) {
   back.setAttribute('aria-label', L.t.back);
   langBtn.textContent = L.flag;
   langBtn.setAttribute('aria-label', L.t.pick + ' : ' + L.name);
+  pasteBtn.setAttribute('aria-label', L.t.paste);
+  pasteBtn.title = L.t.paste;
   Array.from(menu.children).forEach(b => b.setAttribute('aria-current', b.dataset.l === lang ? 'true' : 'false'));
 
   if (!navigate) return;
@@ -1079,6 +1102,19 @@ function readHash() {
   const cut = raw.indexOf('/');
   const head = cut > 0 ? raw.slice(0, cut) : '';
   return LANGS[head] ? { lang: head, word: dec(raw.slice(cut + 1)) } : { lang: null, word: dec(raw) };
+}
+
+/* Coller : le presse-papiers n'est lisible que sur geste de l'utilisateur. */
+if (navigator.clipboard && navigator.clipboard.readText) {
+  pasteBtn.hidden = false;
+  pasteBtn.addEventListener('click', async () => {
+    let txt = '';
+    try { txt = await navigator.clipboard.readText(); } catch (e) { txt = ''; }
+    txt = clean(txt).slice(0, 80);
+    if (!txt) { input.focus(); input.select(); return; }
+    input.value = txt;
+    go(txt);
+  });
 }
 
 document.getElementById('f').addEventListener('submit', ev => {
