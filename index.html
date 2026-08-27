@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Downtown</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Les petites applis maison : dictionnaire, buzzer.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Downtown">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23191b1f'/%3E%3Cg fill='%23fff'%3E%3Crect x='38' y='38' width='45' height='45' rx='12'/%3E%3Crect x='97' y='38' width='45' height='45' rx='12' opacity='.55'/%3E%3Crect x='38' y='97' width='45' height='45' rx='12' opacity='.55'/%3E%3Crect x='97' y='97' width='45' height='45' rx='12' opacity='.3'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23191b1f'/%3E%3Cg fill='%23fff'%3E%3Crect x='38' y='38' width='45' height='45' rx='12'/%3E%3Crect x='97' y='38' width='45' height='45' rx='12' opacity='.55'/%3E%3Crect x='38' y='97' width='45' height='45' rx='12' opacity='.55'/%3E%3Crect x='97' y='97' width='45' height='45' rx='12' opacity='.3'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fff; --fg:#1c1c1e; --muted:#6b6f76; --line:#e4e6ea; --card:#f7f8fa;
+  --shadow:0 1px 0 rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#111214; --fg:#e9eaec; --muted:#9aa0a8; --line:#2a2d31; --card:#1a1c1f;
+    --shadow:0 1px 0 rgba(255,255,255,.04);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;
+  padding:0 env(safe-area-inset-right) calc(env(safe-area-inset-bottom) + 32px) env(safe-area-inset-left);
+}
+.wrap{max-width:620px; margin:0 auto; padding:0 16px}
+
+header{padding:calc(env(safe-area-inset-top) + 36px) 0 26px}
+h1{margin:0; font-size:32px; line-height:1.2; letter-spacing:-.02em; font-weight:800}
+header p{margin:6px 0 0; color:var(--muted); font-size:15px}
+
+.apps{display:grid; gap:12px; grid-template-columns:1fr}
+@media (min-width:560px){ .apps{grid-template-columns:1fr 1fr} }
+
+.app{
+  display:flex; align-items:center; gap:14px;
+  padding:16px; border:1px solid var(--line); border-radius:16px;
+  background:var(--card); box-shadow:var(--shadow);
+  color:inherit; text-decoration:none;
+  transition:transform .12s ease, border-color .15s;
+}
+.app:hover{border-color:var(--tint)}
+.app:active{transform:scale(.985)}
+.app:focus-visible{outline:2px solid var(--tint); outline-offset:2px}
+.app .ico{
+  flex:0 0 auto; width:52px; height:52px; border-radius:14px;
+  background:var(--tint); display:flex; align-items:center; justify-content:center;
+}
+.app .ico svg{width:30px; height:30px; display:block}
+.app .txt{flex:1 1 auto; min-width:0}
+.app .name{display:block; font-weight:700; font-size:17px}
+.app .desc{display:block; color:var(--muted); font-size:14px; line-height:1.35; margin-top:2px}
+.app .go{flex:0 0 auto; color:var(--muted); font-size:20px; line-height:1}
+
+.app.dico{--tint:#2b6cb0}
+.app.buzzer{--tint:#d33a34}
+
+footer{margin-top:28px; color:var(--muted); font-size:13px; text-align:center}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Downtown</h1>
+    <p>Les petites applis maison, sans pub et sans compte.</p>
+  </header>
+
+  <nav class="apps">
+
+    <a class="app dico" href="/dico/">
+      <span class="ico" aria-hidden="true">
+        <svg viewBox="0 0 180 180" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M90 58v72"/>
+          <path d="M90 58c-12-9-28-13-46-13-6 0-10 1-10 1v70s4-1 10-1c18 0 34 4 46 15"/>
+          <path d="M90 58c12-9 28-13 46-13 6 0 10 1 10 1v70s-4-1-10-1c-18 0-34 4-46 15"/>
+        </svg>
+      </span>
+      <span class="txt">
+        <span class="name">Dico</span>
+        <span class="desc">Dictionnaire français, anglais et espagnol.</span>
+      </span>
+      <span class="go" aria-hidden="true">›</span>
+    </a>
+
+    <a class="app buzzer" href="/buzzer/">
+      <span class="ico" aria-hidden="true">
+        <svg viewBox="0 0 180 180">
+          <rect x="24" y="106" width="132" height="32" rx="16" fill="#f2c230"/>
+          <circle cx="90" cy="80" r="44" fill="#fff"/>
+          <circle cx="74" cy="64" r="13" fill="#d33a34" opacity=".22"/>
+        </svg>
+      </span>
+      <span class="txt">
+        <span class="name">Buzzer</span>
+        <span class="desc">Équipe rouge ou jaune, chacune son bruit.</span>
+      </span>
+      <span class="go" aria-hidden="true">›</span>
+    </a>
+
+  </nav>
+
+  <footer>Ajoute-les à ton écran d’accueil pour les utiliser comme des applis.</footer>
+
+</div>
+</body>
+</html>
