@@ -144,20 +144,19 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
   var hint=document.getElementById('hint'), tint=document.getElementById('tint');
   var teams=[].slice.call(document.querySelectorAll('.team'));
   var TINT={red:'#c8322d',yellow:'#d9a417'};
-  var team='red', count=0, ac=null;
+  var NAME={red:'Rouge',yellow:'Jaune'};
+  var DUR={red:.55,yellow:.7};
+  var team='red', count=0, ac=null, warned=false;
+  var pool={red:[],yellow:[]}, turn={red:0,yellow:0};
 
-  /* ---------- audio ---------- */
-  function ctx(){
-    if(!ac){
-      var C=window.AudioContext||window.webkitAudioContext;
-      if(!C) return null;
-      ac=new C();
-    }
-    if(ac.state==='suspended') ac.resume();
-    return ac;
-  }
-  function noise(a,t,dur,freq,vol,dest){          // short airy transient
-    var n=Math.floor(a.sampleRate*dur), b=a.createBuffer(1,n,a.sampleRate), d=b.getChannelData(0);
+  /* iOS 16.4+ : quitter la catégorie "ambient", sinon le petit bouton
+     silence du téléphone coupe tout le son de la page. */
+  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
+
+  /* ---------- synthèse ---------- */
+  function noise(a,t,dur,freq,vol,dest){          // court souffle d'attaque
+    var n=Math.max(1,Math.floor(a.sampleRate*dur));
+    var b=a.createBuffer(1,n,a.sampleRate), d=b.getChannelData(0);
     for(var i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
     var s=a.createBufferSource(); s.buffer=b;
     var f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=freq;
@@ -166,10 +165,8 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
   }
 
   /* Rouge : klaxon de clown, deux notes bien grasses qui retombent */
-  function honk(){
-    var a=ctx(); if(!a) return;
-    var t=a.currentTime;
-    var out=a.createGain(); out.connect(a.destination);
+  function honk(a,t,dest){
+    var out=a.createGain(); out.connect(dest);
     out.gain.setValueAtTime(.0001,t);
     out.gain.exponentialRampToValueAtTime(.5,t+.014);
     out.gain.setValueAtTime(.5,t+.30);
@@ -199,10 +196,8 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
   }
 
   /* Jaune : boing de dessin animé, ressort qui frétille */
-  function boing(){
-    var a=ctx(); if(!a) return;
-    var t=a.currentTime;
-    var out=a.createGain(); out.connect(a.destination);
+  function boing(a,t,dest){
+    var out=a.createGain(); out.connect(dest);
     out.gain.setValueAtTime(.0001,t);
     out.gain.exponentialRampToValueAtTime(.55,t+.008);
     out.gain.exponentialRampToValueAtTime(.0001,t+.62);
@@ -224,6 +219,87 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
     noise(a,t,.04,2200,.09,out);
   }
 
+  var VOICE={red:honk,yellow:boing};
+
+  /* ---------- pré-rendu en fichiers WAV ----------
+     Sur iPhone, WebAudio joue en catégorie « ambient » et se fait donc
+     couper par le bouton silence, y compris dans l'appli installée.
+     Une balise <audio>, elle, passe en catégorie lecture : on synthétise
+     donc les deux sons une fois au chargement et on les rejoue comme des
+     fichiers. WebAudio reste en secours si le pré-rendu échoue. */
+  function wav(buf){
+    var d=buf.getChannelData(0), n=d.length, sr=buf.sampleRate;
+    var ab=new ArrayBuffer(44+n*2), v=new DataView(ab), i;
+    function tag(o,str){ for(var j=0;j<str.length;j++) v.setUint8(o+j,str.charCodeAt(j)); }
+    tag(0,'RIFF');  v.setUint32(4,36+n*2,true);
+    tag(8,'WAVE');  tag(12,'fmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true);
+    v.setUint16(32,2,true);  v.setUint16(34,16,true);
+    tag(36,'data'); v.setUint32(40,n*2,true);
+    for(i=0;i<n;i++){
+      var x=d[i]; x=x<-1?-1:x>1?1:x;
+      v.setInt16(44+i*2, x<0?x*0x8000:x*0x7fff, true);
+    }
+    return new Blob([ab],{type:'audio/wav'});
+  }
+
+  function prerender(kind){
+    var OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+    if(!OC||!window.Blob||!window.URL||!URL.createObjectURL) return;
+    var off;
+    try{ off=new OC(1, Math.ceil(44100*DUR[kind]), 44100); }catch(e){ return; }
+    try{ VOICE[kind](off,0,off.destination); }catch(e){ return; }
+    function done(buf){
+      var url;
+      try{ url=URL.createObjectURL(wav(buf)); }catch(e){ return; }
+      for(var i=0;i<3;i++){
+        var el=new Audio(); el.src=url; el.preload='auto';
+        try{ el.load(); }catch(e){}
+        pool[kind].push(el);
+      }
+    }
+    try{
+      var r=off.startRendering();
+      if(r&&r.then) r.then(done)['catch'](function(){});
+      else off.oncomplete=function(e){ done(e.renderedBuffer); };
+    }catch(e){}
+  }
+  prerender('red'); prerender('yellow');
+
+  /* ---------- lecture ---------- */
+  function ctx(){
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return null;
+    if(!ac){ try{ ac=new C(); }catch(e){ return null; } }
+    if(ac.state==='suspended'&&ac.resume) ac.resume();
+    return ac;
+  }
+  function live(kind){
+    var a=ctx(); if(!a) return;
+    try{ VOICE[kind](a,a.currentTime,a.destination); }catch(e){}
+  }
+  function warn(){
+    if(warned) return; warned=true;
+    hint.textContent='Son bloqué : vérifie le bouton silence sur le côté du téléphone.';
+  }
+  function play(kind){
+    var list=pool[kind];
+    if(list.length){
+      var el=list[turn[kind]++ % list.length];
+      try{ el.currentTime=0; }catch(e){}
+      try{
+        var pr=el.play();
+        if(pr&&pr['catch']) pr['catch'](function(){ live(kind); warn(); });
+        return;
+      }catch(e){}
+    }
+    live(kind);
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden&&ac&&ac.state==='suspended'&&ac.resume) ac.resume();
+  });
+
   /* ---------- interactions ---------- */
   function setTeam(t){
     team=t;
@@ -233,11 +309,11 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
     try{ localStorage.setItem('buzzer.team',t); }catch(e){}
   }
   function fire(){
-    (team==='red'?honk:boing)();
-    if(navigator.vibrate) navigator.vibrate(team==='red'?[45,25,45]:35);
+    play(team);
+    if(navigator.vibrate){ try{ navigator.vibrate(team==='red'?[45,25,45]:35); }catch(e){} }
     ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
     count++;
-    hint.innerHTML = '<b>'+(team==='red'?'Rouge':'Jaune')+'</b> a buzzé — '+count+' fois';
+    if(!warned) hint.innerHTML='<b>'+NAME[team]+'</b> a buzzé — '+count+' fois';
   }
   function press(){ buzz.classList.add('down'); fire(); }
   function release(){ buzz.classList.remove('down'); }
@@ -249,7 +325,7 @@ body.yellow .buzzer{color:#4a3400; text-shadow:0 1px 2px rgba(255,255,255,.45)}
   buzz.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
   teams.forEach(function(b){
-    b.addEventListener('click', function(){ setTeam(b.dataset.t); ctx(); });
+    b.addEventListener('click', function(){ setTeam(b.dataset.t); });
   });
 
   addEventListener('keydown', function(e){
