@@ -161,6 +161,31 @@ section.blk>h2{
 .homo .cg{color:var(--muted); font-size:14px}
 
 .hist{margin-top:8px}
+
+.prons{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px}
+.aud{
+  display:inline-flex; align-items:center; gap:7px; padding:5px 12px;
+  border:1px solid var(--line); border-radius:20px; background:var(--card);
+  color:var(--fg); font:inherit; font-size:15px; cursor:pointer;
+}
+.aud.mute{cursor:default}
+.aud svg{flex:0 0 auto; color:var(--accent)}
+.aud .reg{
+  font-size:12px; font-weight:600; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.aud .ipa{font-family:Georgia,"Times New Roman",serif}
+.aud.on{background:var(--accent-bg); border-color:var(--accent)}
+.aud.on svg{animation:puls .9s ease-in-out infinite}
+@keyframes puls{50%{opacity:.3}}
+.lvl{
+  display:inline-block; margin:0 6px 4px 0; padding:1px 6px; border-radius:5px;
+  background:var(--accent); color:#fff; font-size:11px; font-weight:700; letter-spacing:.04em;
+}
+ol.senses .loc{margin:10px 0 0}
+ol.senses .loc .prons{margin:6px 0 4px}
+em.ex .indic{margin-right:6px}
+section.sep{margin-top:26px; padding-top:24px; border-top:3px double var(--line)}
 </style>
 </head>
 <body>
@@ -200,7 +225,6 @@ const PROXY = '';
 const BASE = 'https://www.larousse.fr';
 const DEF  = BASE + '/dictionnaires/francais/';
 const SYN  = BASE + '/dictionnaires/synonymes/';
-const EN_API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
 const TRAD = {
   fr: { url: BASE + '/dictionnaires/francais-anglais/', to: 'en' },
   en: { url: BASE + '/dictionnaires/anglais-francais/', to: 'fr' },
@@ -225,14 +249,14 @@ const LANGS = {
     }
   },
   en: {
-    flag: '\u{1F1EC}\u{1F1E7}', name: 'English', code: 'en', src: 'DictionaryAPI',
+    flag: '\u{1F1EC}\u{1F1E7}', name: 'English', code: 'en', src: 'Cambridge Dictionary',
     t: {
       title:'Dictionary', ph:'Search for a word', back:'Back', pick:'Language', paste:'Paste',
       home:'A word, its definition, its synonyms.', recent:'Recent searches',
       offline: s => 'No network, or ' + s + ' is unreachable.', retry:'Retry',
       none: w => 'No entry for “' + w + '”.',
       syn:'Synonyms and antonyms', expr:'Expressions', homo:'Homonyms', trad:'French translation',
-      synonyms:'Synonyms', antonyms:'Antonyms'
+      synonyms:'Synonyms', antonyms:'Antonyms', listen:'Listen', did:'Did you mean'
     }
   },
   es: {
@@ -275,8 +299,24 @@ const cls = n => (typeof n.className === 'string' ? n.className : '');
 
 function target(u) { return PROXY ? PROXY + encodeURIComponent(u) : u; }
 
+/* Une requête qui traîne laisserait le spinner tourner sans fin : toutes passent par ici. */
+const DELAI = 12000;
+
+function fetchTimed(u, opt, ms) {
+  const o = Object.assign({ credentials: 'omit' }, opt || {});
+  let done = null;
+  if (typeof AbortController === 'function') {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms || DELAI);
+    o.signal = ctrl.signal;
+    done = () => clearTimeout(t);
+  }
+  const p = fetch(u, o);
+  return done ? p.finally(done) : p;
+}
+
 async function fetchDoc(u) {
-  const r = await fetch(target(u), { credentials: 'omit', redirect: 'follow' });
+  const r = await fetchTimed(target(u), { redirect: 'follow' });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const html = await r.text();
   return { doc: new DOMParser().parseFromString(html, 'text/html'), url: r.url || u };
@@ -654,73 +694,435 @@ function renderTrad(doc, w, to) {
   return sec.querySelector('.tr') ? sec : null;
 }
 
-/* ---------- source anglaise : dictionaryapi.dev (JSON) ---------- */
+/* ---------- source anglaise : Cambridge Dictionary (HTML) ---------- */
 
-function enChips(words, label, host) {
-  const list = (words || []).filter(Boolean);
-  if (!list.length) return;
-  const wrap = el('div', 'syn' + (label === T().antonyms ? ' contra' : ''));
-  wrap.appendChild(el('span', 'lbl', label));
-  list.forEach(w => {
-    const b = el('button', 'chip', w);
+const CAMB   = 'https://dictionary.cambridge.org';
+/* la recherche « directe » résout les formes fléchies : cats -> cat, ran -> run */
+const CAMB_Q = CAMB + '/search/direct/?datasetsearch=english&q=';
+
+/* Cambridge n'autorise pas les requêtes navigateur : la page passe par un relais.
+   Celui qui a répondu est réessayé en tête la fois suivante. */
+const RELAYS = [
+  { url: u => 'https://r.jina.ai/' + u, head: {
+      'x-respond-with': 'html',
+      /* ne rapatrier que l'article et la liste de suggestions : jusqu'à trois fois moins d'octets */
+      'x-target-selector': '.pr.dictionary, ul.hul-u',
+      'x-remove-selector': 'script, style, noscript, svg, iframe, .dwl, .dbtn'
+    } },
+  { url: u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
+  { url: u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u) }
+];
+const RELAY_KEY = 'dic.relay';
+const RELAI_DELAI = 8000;      /* au-delà, le relais est considéré muet */
+const RELAI_ECART = 3000;      /* un relais lent n'empêche pas d'essayer le suivant */
+
+/* Dictionnaires de la page, par ordre de préférence : apprenant, américain, affaires. */
+const CAMB_SETS = ['cald4', 'cacd', 'cbed'];
+
+/* Mot inconnu : Cambridge sert une page de suggestions. */
+const SUGGEST = 'a[href*="/search/english/direct/?q="]';
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function relayDoc(k, url) {
+  const r = await fetchTimed(RELAYS[k].url(url), { headers: RELAYS[k].head || {} }, RELAI_DELAI);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+  /* un relais en panne rend sa propre page : ni article, ni suggestion */
+  if (!doc.querySelector('.entry-body__el') && !doc.querySelector(SUGGEST)) throw new Error('page vide');
+  try { localStorage.setItem(RELAY_KEY, String(k)); } catch (e) {}
+  return doc;
+}
+
+/* Le relais qui a servi la dernière fois part seul ; s'il tarde, les autres le
+   rejoignent sans l'abandonner et la première page exploitable l'emporte. */
+/* Les pages déjà consultées restent en mémoire : revenir en arrière est immédiat. */
+const cambCache = new Map();
+const CACHE_MAX = 12;
+
+async function cambDoc(w) {
+  const key = w.toLowerCase();
+  if (cambCache.has(key)) return cambCache.get(key);
+
+  const url = CAMB_Q + encodeURIComponent(w);
+  let first = 0;
+  try { first = Number(localStorage.getItem(RELAY_KEY)) || 0; } catch (e) {}
+
+  let win = null, err = null;
+  const live = new Set();
+
+  const start = i => {
+    const p = relayDoc((first + i) % RELAYS.length, url)
+      .then(doc => { if (!win) win = doc; }, e => { err = e; })
+      .then(() => { live.delete(p); });
+    live.add(p);
+  };
+
+  for (let i = 0; i < RELAYS.length && !win; i++) {
+    start(i);
+    await Promise.race(i + 1 < RELAYS.length ? [...live, sleep(RELAI_ECART)] : [...live]);
+  }
+  while (!win && live.size) await Promise.race([...live]);
+
+  if (win) {
+    cambCache.set(key, win);
+    if (cambCache.size > CACHE_MAX) cambCache.delete(cambCache.keys().next().value);
+    return win;
+  }
+  throw err || new Error('relais indisponible');
+}
+
+/* /dictionary/english/big-cat -> « big cat » ; ...?q=cats -> « cats » */
+function cambWord(href) {
+  let u;
+  try { u = new URL(href, CAMB); } catch (e) { return ''; }
+  const q = u.searchParams.get('q');
+  if (q) return clean(q);
+  const m = u.pathname.match(/^\/dictionary\/english\/([^/]+)\/?$/);
+  if (!m) return '';
+  let w = m[1];
+  try { w = decodeURIComponent(w); } catch (e) { /* déjà décodé */ }
+  return clean(w.replace(/-/g, ' '));
+}
+
+/* ---------- prononciation ---------- */
+
+/* Un seul son à la fois ; le bouton reprend son aspect au repos. */
+let sound = null;
+
+function playPron(btn, src) {
+  if (sound) { sound.audio.pause(); sound.btn.classList.remove('on'); }
+  const audio = new Audio(src);
+  sound = { audio: audio, btn: btn };
+  btn.classList.add('on');
+  const stop = () => {
+    btn.classList.remove('on');
+    if (sound && sound.audio === audio) sound = null;
+  };
+  audio.addEventListener('ended', stop);
+  audio.addEventListener('error', stop);
+  const p = audio.play();
+  if (p && p.catch) p.catch(stop);
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function speaker() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+  svg.setAttribute('aria-hidden', 'true');
+  const body = document.createElementNS(SVG_NS, 'path');
+  body.setAttribute('fill', 'currentColor');
+  body.setAttribute('d', 'M4 9.5h3.2L12 5.5v13L7.2 14.5H4z');
+  const wave = document.createElementNS(SVG_NS, 'path');
+  wave.setAttribute('fill', 'none');
+  wave.setAttribute('stroke', 'currentColor');
+  wave.setAttribute('stroke-width', '1.7');
+  wave.setAttribute('stroke-linecap', 'round');
+  wave.setAttribute('d', 'M15.4 9.6a3.4 3.4 0 0 1 0 4.8M17.9 7a7 7 0 0 1 0 10');
+  svg.appendChild(body);
+  svg.appendChild(wave);
+  return svg;
+}
+
+/* « uk /kæt/ » : bouton si le son existe, simple étiquette sinon. */
+function pronBtn(pron) {
+  const src = pron.querySelector('source[type="audio/mpeg"]');
+  const reg = clean((pron.querySelector('.region') || {}).textContent);
+  const ipa = clean((pron.querySelector('.ipa') || {}).textContent);
+  if (!src && !ipa) return null;
+
+  let url = '';
+  if (src) { try { url = new URL(src.getAttribute('src'), CAMB).href; } catch (e) { url = ''; } }
+
+  const box = el(url ? 'button' : 'span', 'aud' + (url ? '' : ' mute'));
+  if (url) {
+    box.type = 'button';
+    box.setAttribute('aria-label', T().listen + (reg ? ' (' + reg + ')' : ''));
+    box.appendChild(speaker());
+    box.addEventListener('click', () => playPron(box, url));
+  }
+  if (reg) box.appendChild(el('span', 'reg', reg));
+  if (ipa) box.appendChild(el('span', 'ipa', '/' + ipa + '/'));
+  return box;
+}
+
+function pronRow(scope) {
+  const row = el('div', 'prons');
+  const seen = new Set();
+  scope.querySelectorAll('.dpron-i').forEach(p => {
+    const key = clean(p.textContent);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const b = pronBtn(p);
+    if (b) row.appendChild(b);
+  });
+  return row.childNodes.length ? row : null;
+}
+
+/* ---------- rendu d'un article Cambridge ---------- */
+
+/* Niveau CECR, codes grammaticaux, domaine, registre. */
+const LABELS = '.gram, .lab, .domain, .var, .usage';
+
+function enLabels(scope, host) {
+  const lvl = scope.querySelector('.epp-xref');
+  if (lvl) host.appendChild(el('span', 'lvl', clean(lvl.textContent)));
+
+  const seen = new Set();
+  scope.querySelectorAll(LABELS).forEach(n => {
+    /* « <lab><usage>specialized</usage></lab> » : l'étiquette imbriquée ferait doublon */
+    if (n.parentElement && n.parentElement.closest(LABELS)) return;
+    const t = clean(n.textContent);
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    host.appendChild(el('span', 'indic', t));
+  });
+}
+
+function enExamples(block, host) {
+  /* le corps du sens est parfois enveloppé dans des divs de mise en page */
+  block.querySelectorAll('.examp').forEach(x => {
+    const eg = x.querySelector('.eg');
+    if (!eg || x.closest('.def-block') !== block) return;
+    const line = el('em', 'ex');
+    const g = x.querySelector('.gram, .lab');
+    if (g && clean(g.textContent)) line.appendChild(el('span', 'indic', clean(g.textContent)));
+    inline(eg, line);
+    if (clean(line.textContent)) host.appendChild(line);
+  });
+}
+
+/* Renvois : synonymes, contraires, idiomes, verbes à particule, voir aussi. */
+function enXref(x, host) {
+  const title = clean((x.querySelector('.xref-title') || {}).textContent);
+  const wrap = el('div', 'syn' + (/opposite|antonym/i.test(title) ? ' contra' : ''));
+  if (title) wrap.appendChild(el('span', 'lbl', title));
+
+  const seen = new Set();
+  x.querySelectorAll('a').forEach(a => {
+    const t = clean(a.textContent);
+    const w = cambWord(a.getAttribute('href') || '');
+    if (!t || !w || seen.has(t)) return;
+    seen.add(t);
+    const b = el('button', 'chip', t);
     b.type = 'button';
     b.addEventListener('click', () => go(w));
     wrap.appendChild(b);
   });
-  host.appendChild(wrap);
+
+  if (wrap.querySelector('.chip')) host.appendChild(wrap);
 }
 
-function enEntry(e) {
-  const box = el('article', 'entry');
-  box.appendChild(el('h1', null, e.word));
+function enDef(block, n, seen) {
+  const item = el('li');
+  item.appendChild(el('span', 'num', String(n)));
 
-  const phon = e.phonetic || (e.phonetics || []).map(p => p.text).filter(Boolean)[0];
-  if (phon) box.appendChild(el('p', 'orig', phon));
+  const head = block.querySelector('.ddef_h');
+  if (head) enLabels(head, item);
 
-  (e.meanings || []).forEach(m => {
-    if (m.partOfSpeech) box.appendChild(el('p', 'cat', m.partOfSpeech));
+  const def = block.querySelector('.def');
+  if (def) { const p = el('p', 'def'); inline(def, p); item.appendChild(p); }
 
-    const list = el('ol', 'senses');
-    (m.definitions || []).forEach((d, i) => {
-      if (!d.definition) return;
-      const item = el('li');
-      item.appendChild(el('span', 'num', String(i + 1)));
-      item.appendChild(el('p', 'def', d.definition));
-      if (d.example) item.appendChild(el('em', 'ex', d.example));
-      enChips(d.synonyms, T().synonyms, item);
-      enChips(d.antonyms, T().antonyms, item);
-      list.appendChild(item);
-    });
-    if (list.childNodes.length) box.appendChild(list);
+  enExamples(block, item);
+  block.querySelectorAll('.xref').forEach(x => { seen.add(x); enXref(x, item); });
+  return item;
+}
 
-    const extra = el('div');
-    enChips(m.synonyms, T().synonyms, extra);
-    enChips(m.antonyms, T().antonyms, extra);
-    if (extra.childNodes.length) box.appendChild(extra);
+/* Expressions rattachées à un sens : « put some colour in someone's cheeks » */
+function enPhrase(pb, seen) {
+  const dl = el('dl', 'loc');
+  const dt = el('dt');
+  const title = pb.querySelector('.phrase-title');
+  if (title) inline(title, dt);
+  if (clean(dt.textContent)) dl.appendChild(dt);
+
+  pb.querySelectorAll('.def-block').forEach(b => {
+    const dd = el('dd');
+    const def = b.querySelector('.def');
+    if (def) { const p = el('p', 'def'); inline(def, p); dd.appendChild(p); }
+    enExamples(b, dd);
+    b.querySelectorAll('.xref').forEach(x => { seen.add(x); enXref(x, dd); });
+    if (dd.childNodes.length) dl.appendChild(dd);
   });
+
+  return clean(dl.textContent) ? dl : null;
+}
+
+/* Dérivés : « abandonment noun [U] … » */
+function enRunon(r, seen) {
+  const dl = el('dl', 'loc');
+  const dt = el('dt');
+  const t = r.querySelector('.runon-title');
+  if (t) dt.appendChild(document.createTextNode(clean(t.textContent)));
+  const pos = r.querySelector('.runon-head .pos');
+  if (pos) { dt.appendChild(document.createTextNode(' ')); dt.appendChild(el('span', 'cg', clean(pos.textContent))); }
+  if (clean(dt.textContent)) dl.appendChild(dt);
+
+  const head = r.querySelector('.runon-head');
+  if (head) { const row = pronRow(head); if (row) dl.appendChild(row); }
+
+  r.querySelectorAll('.def-block').forEach(b => {
+    const dd = el('dd');
+    const def = b.querySelector('.def');
+    if (def) { const p = el('p', 'def'); inline(def, p); dd.appendChild(p); }
+    enExamples(b, dd);
+    b.querySelectorAll('.xref').forEach(x => { seen.add(x); enXref(x, dd); });
+    if (dd.childNodes.length) dl.appendChild(dd);
+  });
+
+  return clean(dl.textContent) ? dl : null;
+}
+
+function enEntry(entry) {
+  const box = el('article', 'entry');
+  const header = entry.querySelector('.pos-header');
+  const hw = entry.querySelector('.headword');
+
+  const h1 = el('h1', null, clean(hw ? hw.textContent : ''));
+  if (clean(h1.textContent)) box.appendChild(h1);
+
+  if (header) {
+    const cat = catText(header.querySelector('.posgram')) || catText(header.querySelector('.pos'));
+    if (cat) box.appendChild(el('p', 'cat', cat));
+
+    const row = pronRow(header);
+    if (row) box.appendChild(row);
+
+    const infl = Array.from(header.querySelectorAll('.irreg-infls'))
+      .map(n => clean(n.textContent)).filter(Boolean).join(' · ');
+    if (infl) box.appendChild(el('p', 'orig', infl));
+  }
+
+  const seen = new Set();
+  const list = el('ol', 'senses');
+  let n = 0;
+
+  const body = entry.querySelector('.pos-body') || entry;
+  let senses = Array.from(body.querySelectorAll(':scope > .dsense'));
+  if (!senses.length) senses = Array.from(entry.querySelectorAll('.dsense'));
+
+  senses.forEach(sense => {
+    const items = [];
+    sense.querySelectorAll('.def-block').forEach(b => {
+      if (b.closest('.phrase-block') || b.closest('.runon')) return;
+      items.push(enDef(b, ++n, seen));
+    });
+
+    const extra = [];
+    sense.querySelectorAll('.phrase-block').forEach(pb => {
+      const dl = enPhrase(pb, seen);
+      if (dl) extra.push(dl);
+    });
+    /* sens sans définition propre : il ne porte que des expressions */
+    if (extra.length && !items.length) {
+      const li = el('li');
+      li.appendChild(el('span', 'num', '\u2022'));
+      items.push(li);
+    }
+    if (extra.length) extra.forEach(dl => items[items.length - 1].appendChild(dl));
+
+    const gw = sense.querySelector('.dsense_h .guideword');
+    if (gw && items.length) {
+      const rub = el('span', 'rub', clean(gw.textContent).replace(/^\(\s*|\s*\)$/g, ''));
+      items[0].insertBefore(rub, items[0].childNodes[1] || null);
+    }
+    items.forEach(li => list.appendChild(li));
+  });
+
+  /* article sans sens balisé : les définitions pendent du corps */
+  if (!list.childNodes.length) {
+    entry.querySelectorAll('.def-block').forEach(b => {
+      if (b.closest('.phrase-block') || b.closest('.runon')) return;
+      list.appendChild(enDef(b, ++n, seen));
+    });
+  }
+  if (list.childNodes.length) box.appendChild(list);
+
+  entry.querySelectorAll('.runon').forEach(r => {
+    const dl = enRunon(r, seen);
+    if (dl) box.appendChild(dl);
+  });
+
+  entry.querySelectorAll('.xref').forEach(x => { if (!seen.has(x)) enXref(x, box); });
   return box;
 }
 
+/* Le dictionnaire le plus complet de la page ; les autres répètent les mêmes sens. */
+function cambEntries(doc) {
+  for (const id of CAMB_SETS) {
+    const set = doc.querySelector('.dictionary[data-id="' + id + '"]');
+    const list = set ? set.querySelectorAll('.entry-body__el') : [];
+    if (list.length) return Array.from(list);
+  }
+  return Array.from(doc.querySelectorAll('.entry-body__el'));
+}
+
+function enSuggest(doc) {
+  const seen = new Set(), list = [];
+  doc.querySelectorAll(SUGGEST).forEach(a => {
+    const t = clean(a.textContent);
+    const k = t.toLowerCase();
+    if (!t || seen.has(k) || list.length >= 12) return;
+    seen.add(k);
+    list.push(t);
+  });
+  return list;
+}
+
 async function enFetch(w) {
-  const trad = fetchTrad('en', w);                 /* en parallèle de la définition */
+  /* la traduction arrive après, sous l'article : elle ne retarde pas Cambridge */
+  const trad = fetchTrad('en', w);
 
-  let data = null, down = false;
-  try {
-    const r = await fetch(EN_API + encodeURIComponent(w), { credentials: 'omit' });
-    if (r.ok) data = await r.json();
-    else if (r.status !== 404) down = true;        /* l'API rend 502 sur certains mots */
-  } catch (e) { down = true; }
+  let doc = null, down = false;
+  try { doc = await cambDoc(w); } catch (e) { down = true; }
 
-  const entries = Array.isArray(data) ? data : [];
-  const sec = renderTrad(await trad, w, TRAD.en.to);
-  /* la traduction seule vaut mieux qu'une page d'erreur */
-  if (!entries.length && !sec) { if (down) throw new Error('source indisponible'); return null; }
+  const entries = doc ? cambEntries(doc) : [];
+
+  if (!entries.length) {
+    /* la traduction seule vaut mieux qu'une page d'erreur */
+    const sec = renderTrad(await trad, w, TRAD.en.to);
+    if (sec) return { lemma: w, render(box) { box.appendChild(sec); } };
+    if (down) throw new Error('source indisponible');
+    const hints = enSuggest(doc);
+    if (!hints.length) return null;
+    return {
+      lemma: w,
+      miss: true,                                  /* mot inconnu : hors historique */
+      render(box) {
+        const msg = el('div', 'msg');
+        msg.appendChild(el('p', null, T().none(w)));
+        box.appendChild(msg);
+        const sug = el('section', 'blk hist');
+        sug.appendChild(el('h2', null, T().did));
+        hints.forEach(h => {
+          const b = el('button', 'chip', h);
+          b.type = 'button';
+          b.addEventListener('click', () => go(h));
+          sug.appendChild(b);
+        });
+        box.appendChild(sug);
+      }
+    };
+  }
+
+  const first = entries[0] ? entries[0].querySelector('.headword') : null;
+  let tail = null;
 
   return {
-    lemma: clean((entries[0] || {}).word) || w,
+    lemma: clean(first ? first.textContent : '') || w,
     render(box) {
-      if (sec) box.appendChild(sec);
+      LINKWORD = cambWord;
       entries.forEach(e => box.appendChild(enEntry(e)));
+      tail = box.appendChild(el('div'));       /* la traduction viendra s'y ranger */
+    },
+    async more(alive) {
+      const sec = renderTrad(await trad, w, TRAD.en.to);
+      if (!alive() || !sec || !tail) return;
+      sec.classList.add('sep');
+      tail.appendChild(sec);
     }
   };
 }
@@ -910,7 +1312,7 @@ function esLocutions(block) {
 
 async function esPage(w) {
   const q = '?action=parse&prop=text&formatversion=2&format=json&origin=*&redirects=1&page=';
-  const r = await fetch(ES_API + q + encodeURIComponent(w), { credentials: 'omit' });
+  const r = await fetchTimed(ES_API + q + encodeURIComponent(w));
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const data = await r.json();
   return data.error ? null : data.parse;      /* missingtitle : page absente */
@@ -1029,7 +1431,7 @@ async function show(w) {
 
   if (!res) { message([el('p', null, T().none(w))]); return; }
 
-  pushHist(res.lemma);
+  if (!res.miss) pushHist(res.lemma);
   out.textContent = '';
   if (res.lemma.toLowerCase() !== w.toLowerCase()) {
     out.appendChild(el('p', 'note', w + ' → ' + res.lemma));
