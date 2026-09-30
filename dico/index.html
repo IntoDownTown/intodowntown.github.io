@@ -315,11 +315,32 @@ function fetchTimed(u, opt, ms) {
   return done ? p.finally(done) : p;
 }
 
+/* Une page n'est demandée qu'une fois : recherches répétées, retours en arrière,
+   liens déjà suivis et double-clics se servent ici. On garde le texte plutôt que
+   le document : moins de mémoire retenue, et l'analyse ne coûte que quelques ms. */
+const pages = new Map();
+const PAGES_MAX = 24;
+
+function fetchText(u, opt, ms) {
+  const hit = pages.get(u);
+  if (hit) return hit;
+
+  const p = fetchTimed(u, opt, ms).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text().then(text => ({ text, url: r.url || u }));
+  });
+  p.catch(() => forget(u));                  /* un échec ne se met pas en cache */
+
+  pages.set(u, p);
+  if (pages.size > PAGES_MAX) pages.delete(pages.keys().next().value);
+  return p;
+}
+
+const forget = u => pages.delete(u);
+
 async function fetchDoc(u) {
-  const r = await fetchTimed(target(u), { redirect: 'follow' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const html = await r.text();
-  return { doc: new DOMParser().parseFromString(html, 'text/html'), url: r.url || u };
+  const r = await fetchText(target(u), { redirect: 'follow' });
+  return { doc: new DOMParser().parseFromString(r.text, 'text/html'), url: r.url };
 }
 
 /* Dernier segment « mot » d'une URL Larousse : /dictionnaires/<dico>/<mot>/<id> */
@@ -701,16 +722,17 @@ const CAMB   = 'https://dictionary.cambridge.org';
 const CAMB_Q = CAMB + '/search/direct/?datasetsearch=english&q=';
 
 /* Cambridge n'autorise pas les requêtes navigateur : la page passe par un relais.
-   Celui qui a répondu est réessayé en tête la fois suivante. */
+   allorigins et codetabs ont été retirés le 16/09/2026, tous deux en panne durable
+   (522) : ils ne servaient qu'à ajouter vingt secondes d'attente avant l'échec.
+   Pour en ajouter un — un Worker Cloudflare à soi, par exemple —, une ligne suffit ;
+   celui qui a répondu est réessayé en tête la fois suivante. */
 const RELAYS = [
   { url: u => 'https://r.jina.ai/' + u, head: {
       'x-respond-with': 'html',
       /* ne rapatrier que l'article et la liste de suggestions : jusqu'à trois fois moins d'octets */
       'x-target-selector': '.pr.dictionary, ul.hul-u',
       'x-remove-selector': 'script, style, noscript, svg, iframe, .dwl, .dbtn'
-    } },
-  { url: u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
-  { url: u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u) }
+    } }
 ];
 const RELAY_KEY = 'dic.relay';
 const RELAI_DELAI = 8000;      /* au-delà, le relais est considéré muet */
@@ -725,25 +747,21 @@ const SUGGEST = 'a[href*="/search/english/direct/?q="]';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function relayDoc(k, url) {
-  const r = await fetchTimed(RELAYS[k].url(url), { headers: RELAYS[k].head || {} }, RELAI_DELAI);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+  const via = RELAYS[k].url(url);
+  const r = await fetchText(via, { headers: RELAYS[k].head || {} }, RELAI_DELAI);
+  const doc = new DOMParser().parseFromString(r.text, 'text/html');
   /* un relais en panne rend sa propre page : ni article, ni suggestion */
-  if (!doc.querySelector('.entry-body__el') && !doc.querySelector(SUGGEST)) throw new Error('page vide');
+  if (!doc.querySelector('.entry-body__el') && !doc.querySelector(SUGGEST)) {
+    forget(via);                             /* ne pas garder une réponse inexploitable */
+    throw new Error('page vide');
+  }
   try { localStorage.setItem(RELAY_KEY, String(k)); } catch (e) {}
   return doc;
 }
 
 /* Le relais qui a servi la dernière fois part seul ; s'il tarde, les autres le
    rejoignent sans l'abandonner et la première page exploitable l'emporte. */
-/* Les pages déjà consultées restent en mémoire : revenir en arrière est immédiat. */
-const cambCache = new Map();
-const CACHE_MAX = 12;
-
 async function cambDoc(w) {
-  const key = w.toLowerCase();
-  if (cambCache.has(key)) return cambCache.get(key);
-
   const url = CAMB_Q + encodeURIComponent(w);
   let first = 0;
   try { first = Number(localStorage.getItem(RELAY_KEY)) || 0; } catch (e) {}
@@ -764,11 +782,7 @@ async function cambDoc(w) {
   }
   while (!win && live.size) await Promise.race([...live]);
 
-  if (win) {
-    cambCache.set(key, win);
-    if (cambCache.size > CACHE_MAX) cambCache.delete(cambCache.keys().next().value);
-    return win;
-  }
+  if (win) return win;
   throw err || new Error('relais indisponible');
 }
 
@@ -790,17 +804,26 @@ function cambWord(href) {
 /* Un seul son à la fois ; le bouton reprend son aspect au repos. */
 let sound = null;
 
+const sons = new Map();                      /* un mot déjà écouté ne se retélécharge pas */
+
 function playPron(btn, src) {
   if (sound) { sound.audio.pause(); sound.btn.classList.remove('on'); }
-  const audio = new Audio(src);
+
+  let audio = sons.get(src);
+  if (!audio) { audio = new Audio(src); sons.set(src, audio); }
+  audio.currentTime = 0;
+
   sound = { audio: audio, btn: btn };
   btn.classList.add('on');
+
   const stop = () => {
     btn.classList.remove('on');
     if (sound && sound.audio === audio) sound = null;
   };
-  audio.addEventListener('ended', stop);
-  audio.addEventListener('error', stop);
+  /* affectation et non addEventListener : un son réécouté n'accumule pas d'écouteurs */
+  audio.onended = stop;
+  audio.onerror = stop;
+
   const p = audio.play();
   if (p && p.catch) p.catch(stop);
 }
@@ -1312,9 +1335,8 @@ function esLocutions(block) {
 
 async function esPage(w) {
   const q = '?action=parse&prop=text&formatversion=2&format=json&origin=*&redirects=1&page=';
-  const r = await fetchTimed(ES_API + q + encodeURIComponent(w));
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const data = await r.json();
+  const r = await fetchText(ES_API + q + encodeURIComponent(w));
+  const data = JSON.parse(r.text);
   return data.error ? null : data.parse;      /* missingtitle : page absente */
 }
 

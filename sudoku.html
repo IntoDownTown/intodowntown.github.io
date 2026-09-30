@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Le sudoku du trésor</title>
+<style>
+:root{
+  --bg:#E6EDF1; --paper:#FFFFFF; --ink:#1B2A41; --ink-soft:#4E5D72; --line:#B9C5D1;
+  --player:#2F5D8A; --brass:#B8841F; --brass-tint:#F7E4B0; --brass-ink:#5C3F06;
+  --sel:#D6E4F2; --peer:#EFF4F8; --err:#B3261E; --err-tint:#FBE1DE; --ok:#1E6B45;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1723; --paper:#172333; --ink:#E4EBF2; --ink-soft:#9FB0C3; --line:#34465C;
+    --player:#8DB8E6; --brass:#D9A441; --brass-tint:#4A3812; --brass-ink:#F7E4B0;
+    --sel:#24405E; --peer:#1C2B3E; --err:#FF8A80; --err-tint:#4A1E1B; --ok:#7BD3A4;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1723; --paper:#172333; --ink:#E4EBF2; --ink-soft:#9FB0C3; --line:#34465C;
+  --player:#8DB8E6; --brass:#D9A441; --brass-tint:#4A3812; --brass-ink:#F7E4B0;
+  --sel:#24405E; --peer:#1C2B3E; --err:#FF8A80; --err-tint:#4A1E1B; --ok:#7BD3A4;
+}
+*,*:before,*:after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:#E6EDF1;background:var(--bg);color:#1B2A41;color:var(--ink);
+  font-family:"Avenir Next","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.5}
+main{display:block;max-width:520px;margin:0 auto;padding:28px 16px 40px}
+h1{font-size:2.2rem;font-weight:800;line-height:1.05;margin:0 0 10px;letter-spacing:-0.02em}
+.intro{margin:0 0 20px;color:#4E5D72;color:var(--ink-soft);max-width:46ch}
+.intro strong{color:#5C3F06;color:var(--brass-ink);background:#F7E4B0;background:var(--brass-tint);padding:0 4px;border-radius:3px}
+.wrap{position:relative;width:100%;height:0;padding-top:100%}
+table.board{position:absolute;top:0;left:0;width:100%;height:100%;border-collapse:collapse;table-layout:fixed;
+  background:#fff;background:var(--paper);border:3px solid #1B2A41;border-color:var(--ink)}
+.board td{padding:0;height:11.11%;border:1px solid #B9C5D1;border-color:var(--line)}
+.board td.br{border-right:2.5px solid #1B2A41;border-right-color:var(--ink)}
+.board td.bb{border-bottom:2.5px solid #1B2A41;border-bottom-color:var(--ink)}
+.cell{display:block;width:100%;height:100%;border:0;margin:0;padding:0;background:transparent;
+  color:#2F5D8A;color:var(--player);font-family:inherit;font-size:1.5rem;text-align:center;
+  outline:none;border-radius:0;-webkit-appearance:none;-moz-appearance:none;appearance:none}
+@media (max-width:420px){.cell{font-size:1.2rem}}
+.cell.given{color:#1B2A41;color:var(--ink);font-weight:800}
+.cell.gold{background:#F7E4B0;background:var(--brass-tint);color:#5C3F06;color:var(--brass-ink);font-weight:600}
+.cell.peer{background:#EFF4F8;background:var(--peer)}
+.cell.gold.peer{background:#F7E4B0;background:var(--brass-tint)}
+.cell.sel{background:#D6E4F2;background:var(--sel);box-shadow:inset 0 0 0 2px #2F5D8A;box-shadow:inset 0 0 0 2px var(--player)}
+.cell.gold.sel{box-shadow:inset 0 0 0 2px #B8841F;box-shadow:inset 0 0 0 2px var(--brass)}
+.cell.wrong{background:#FBE1DE;background:var(--err-tint);color:#B3261E;color:var(--err)}
+.pad{margin-top:16px;overflow:hidden}
+.pad button{float:left;width:18.4%;margin:0 2% 8px 0;min-height:48px;font-size:1.25rem;font-weight:600}
+.pad button.last{margin-right:0}
+.pad button.erase{font-size:.95rem}
+button{font-family:inherit;border-radius:8px;cursor:pointer;border:1.5px solid #1B2A41;border-color:var(--ink);
+  background:#fff;background:var(--paper);color:#1B2A41;color:var(--ink);-webkit-appearance:none;appearance:none}
+.actions{margin-top:10px;overflow:hidden}
+.actions button{float:left;width:49%;min-height:48px;font-weight:600;padding:0 10px}
+.actions button + button{margin-left:2%}
+.actions .primary{background:#1B2A41;background:var(--ink);color:#fff;color:var(--paper)}
+button:focus-visible,.cell:focus-visible{outline:3px solid #B8841F;outline-offset:2px}
+.status{min-height:1.5em;margin:14px 0 0;font-weight:600}
+.status.ok{color:#1E6B45;color:var(--ok)} .status.bad{color:#B3261E;color:var(--err)}
+@media print{
+  body{background:#fff}
+  .pad,.actions,.status{display:none}
+  main{padding:0}
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Le sudoku du trésor</h1>
+  <p class="intro">Complétez la grille : chaque ligne, chaque colonne et chaque carré de 3x3 contient une seule fois les chiffres de 1 à 9. Additionnez ensuite les chiffres des <strong>cases dorées</strong> : le total est le numéro final.</p>
+
+  <div class="wrap"><table class="board" id="board" aria-label="Grille de sudoku"><tbody id="rows"></tbody></table></div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="actions">
+    <button type="button" class="primary" id="check">Vérifier ma grille</button><button type="button" id="reset">Tout effacer</button>
+  </div>
+  <p class="status" id="status" role="status" aria-live="polite"></p>
+</main>
+<script>
+(function(){
+  var PUZZLE=[".....4...","...3.1.2.",".2.9....7","7..53.1..",".82.....3",".4...9...","21.4...5.",".6...5...","5..7..48."];
+  var GOLD=["0,2","2,7","5,3","7,7"];
+  var KEY="sudoku-tresor-v2";
+  var rows=document.getElementById("rows"),statusEl=document.getElementById("status");
+  var cells=[],sel=null,armed=false,timer=null;
+
+  function hasClass(el,c){return (" "+el.className+" ").indexOf(" "+c+" ")>-1;}
+  function setClass(el,c,on){
+    var has=hasClass(el,c);
+    if(on&&!has)el.className=(el.className+" "+c).replace(/^\s+/,"");
+    if(!on&&has)el.className=(" "+el.className+" ").replace(" "+c+" "," ").replace(/^\s+|\s+$/g,"");
+  }
+  function isGold(r,c){for(var i=0;i<GOLD.length;i++)if(GOLD[i]===r+","+c)return true;return false;}
+  function at(r,c){return cells[r*9+c];}
+  function say(msg,kind){statusEl.textContent=msg;statusEl.className="status"+(kind?" "+kind:"");}
+
+  var saved=null;
+  try{saved=JSON.parse(window.localStorage.getItem(KEY)||"null");}catch(e){saved=null;}
+
+  for(var r=0;r<9;r++){
+    var tr=document.createElement("tr");
+    for(var c=0;c<9;c++){
+      var td=document.createElement("td");
+      if(c===2||c===5)td.className="br";
+      if(r===2||r===5)td.className+=(td.className?" ":"")+"bb";
+      var el=document.createElement("input");
+      el.type="text";el.className="cell";el.maxLength=1;
+      el.setAttribute("inputmode","numeric");el.setAttribute("pattern","[1-9]*");
+      el.setAttribute("autocomplete","off");el.setAttribute("aria-label","Ligne "+(r+1)+", colonne "+(c+1));
+      el.setAttribute("data-r",r);el.setAttribute("data-c",c);
+      if(isGold(r,c))setClass(el,"gold",true);
+      var g=PUZZLE[r].charAt(c);
+      if(g!=="."){el.value=g;el.readOnly=true;setClass(el,"given",true);}
+      else if(saved&&saved[r*9+c]&&/^[1-9]$/.test(saved[r*9+c]))el.value=saved[r*9+c];
+      bind(el,r,c);
+      td.appendChild(el);tr.appendChild(td);cells.push(el);
+    }
+    rows.appendChild(tr);
+  }
+
+  function bind(el,r,c){
+    el.onfocus=function(){select(r,c);};
+    el.onkeydown=function(e){
+      e=e||window.event;var k=e.key||"",code=e.keyCode;
+      var mv=null;
+      if(k==="ArrowUp"||code===38)mv=[-1,0];else if(k==="ArrowDown"||code===40)mv=[1,0];
+      else if(k==="ArrowLeft"||code===37)mv=[0,-1];else if(k==="ArrowRight"||code===39)mv=[0,1];
+      if(mv){stop(e);at((r+mv[0]+9)%9,(c+mv[1]+9)%9).focus();return;}
+      if(el.readOnly)return;
+      if(k==="Backspace"||k==="Delete"||code===8||code===46){stop(e);setVal(r,c,"");return;}
+      var d=/^[1-9]$/.test(k)?k:((code>=49&&code<=57)?String(code-48):((code>=97&&code<=105)?String(code-96):null));
+      if(d){stop(e);setVal(r,c,d);}
+    };
+    el.oninput=function(){if(el.readOnly)return;var v=el.value.replace(/[^1-9]/g,"");el.value=v?v.charAt(v.length-1):"";afterEdit();};
+  }
+  function stop(e){if(e.preventDefault)e.preventDefault();else e.returnValue=false;}
+
+  function select(r,c){
+    sel=[r,c];
+    for(var i=0;i<81;i++){
+      var a=Math.floor(i/9),b=i%9,me=(a===r&&b===c);
+      var peer=!me&&(a===r||b===c||(Math.floor(a/3)===Math.floor(r/3)&&Math.floor(b/3)===Math.floor(c/3)));
+      setClass(cells[i],"sel",me);setClass(cells[i],"peer",peer);
+    }
+  }
+  function setVal(r,c,v){var el=at(r,c);if(el.readOnly)return;el.value=v;afterEdit();}
+
+  function conflicts(){
+    var bad=[];
+    for(var i=0;i<81;i++){
+      var v=cells[i].value;if(!v)continue;
+      var r=Math.floor(i/9),c=i%9,br=r-r%3,bc=c-c%3;
+      for(var j=0;j<81;j++){
+        if(j===i||cells[j].value!==v)continue;
+        var r2=Math.floor(j/9),c2=j%9;
+        if(r2===r||c2===c||(r2-r2%3===br&&c2-c2%3===bc)){bad.push(i);break;}
+      }
+    }
+    return bad;
+  }
+  function filled(){var n=0;for(var i=0;i<81;i++)if(cells[i].value)n++;return n;}
+  function clearMarks(){for(var i=0;i<81;i++)setClass(cells[i],"wrong",false);}
+
+  function afterEdit(){
+    clearMarks();say("");save();
+    if(filled()===81){
+      if(conflicts().length===0)say("Bravo, la grille est juste ! Additionnez maintenant les chiffres des cases dorées.","ok");
+      else say("La grille est remplie, mais un même chiffre apparaît deux fois quelque part. Touchez « Vérifier ma grille » pour le voir.","bad");
+    }
+  }
+  function save(){
+    try{var a=[];for(var i=0;i<81;i++)a.push(cells[i].readOnly?"":cells[i].value);window.localStorage.setItem(KEY,JSON.stringify(a));}catch(e){}
+  }
+
+  var pad=document.getElementById("pad"),labels=["1","2","3","4","5","6","7","8","9","Effacer"];
+  for(var p=0;p<labels.length;p++)(function(v,idx){
+    var b=document.createElement("button");b.type="button";b.textContent=v;
+    if(v==="Effacer"){b.className="erase";b.setAttribute("aria-label","Effacer la case");}
+    if(idx%5===4)b.className+=(b.className?" ":"")+"last";
+    b.onmousedown=function(e){stop(e||window.event);};
+    b.onclick=function(){
+      if(!sel){say("Touchez d'abord une case vide de la grille.","bad");return;}
+      setVal(sel[0],sel[1],v==="Effacer"?"":v);
+    };
+    pad.appendChild(b);
+  })(labels[p],p);
+
+  document.getElementById("check").onclick=function(){
+    clearMarks();var bad=conflicts(),empty=81-filled();
+    for(var i=0;i<bad.length;i++)if(!cells[bad[i]].readOnly)setClass(cells[bad[i]],"wrong",true);
+    if(bad.length)say("Les cases en rouge contiennent un chiffre déjà présent dans leur ligne, leur colonne ou leur carré. Corrigez-les pour continuer.","bad");
+    else if(empty)say("Aucun doublon pour l'instant. Il reste "+empty+" case"+(empty>1?"s":"")+" à remplir.","ok");
+    else say("Bravo, la grille est juste ! Additionnez maintenant les chiffres des cases dorées.","ok");
+  };
+
+  var resetBtn=document.getElementById("reset");
+  resetBtn.onclick=function(){
+    if(!armed){armed=true;resetBtn.textContent="Toucher encore pour effacer";
+      timer=setTimeout(function(){armed=false;resetBtn.textContent="Tout effacer";},3000);return;}
+    clearTimeout(timer);armed=false;resetBtn.textContent="Tout effacer";
+    for(var i=0;i<81;i++)if(!cells[i].readOnly)cells[i].value="";
+    clearMarks();save();say("Grille effacée.");
+  };
+})();
+</script>
+</body>
+</html>
