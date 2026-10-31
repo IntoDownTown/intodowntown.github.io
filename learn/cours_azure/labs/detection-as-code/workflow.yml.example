@@ -1,0 +1,41 @@
+# Copier dans .github/workflows/detections.yml d'un dépôt de lab.
+# Placer main.bicep et queries/ à la racine de ce dépôt.
+# Créer l'environnement secops-lab et ses variables AZURE_* / RESOURCE_GROUP / WORKSPACE.
+# Configurer la fédération OIDC pour le sujet repo:ORG/REPO:environment:secops-lab.
+name: Validate and deploy detection
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Bicep (ne valide pas le KQL)
+        run: az bicep build --file main.bicep --stdout > /dev/null
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: build
+    environment: secops-lab
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Déployer désactivé
+        env:
+          RG: ${{ vars.RESOURCE_GROUP }}
+          LAW: ${{ vars.WORKSPACE }}
+        run: >-
+          az deployment group create
+          --resource-group "$RG"
+          --template-file main.bicep
+          --parameters workspaceName="$LAW" enabled=false

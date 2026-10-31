@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch. 03 — Architecture Sentinel, collecte et MSSP</title>
+<link rel="stylesheet" href="../assets/cours.css"><link rel="stylesheet" href="../assets/cours-lab.css">
+<script src="../assets/cours.js" defer></script>
+</head>
+<body><div id="progress"></div><div class="wrap"><div class="shell">
+<nav class="toc" aria-label="Sommaire du chapitre">
+<p class="toc-h">Chapitre 03</p><a href="../index.html">← Retour à l’accueil</a>
+<a href="#architecture">1. Architecture et frontières</a><a href="#collecte">2. Contrat de collecte</a>
+<a href="#dcr">3. Transformations DCR</a><a href="#asim">4. Normalisation ASIM</a>
+<a href="#mssp">5. Opérations multi-tenant</a><a href="#sante">6. Santé et coûts</a>
+<a href="#lab">Lab guidé</a><a href="#correction">Cas corrigé</a><a href="#validation">Validation</a><a href="#refs">Références</a>
+</nav><main>
+<div class="crumb"><a href="../index.html">Cours Azure SecOps</a><span class="sep">/</span>Mois 2 · Chapitre 03</div>
+<header class="chead"><div class="kicker">Semaines 5–6 · ~14 h</div>
+<h1>Architecture Sentinel :<br>construire une collecte démontrable</h1>
+<p class="lead">Un connecteur vert ne garantit ni la couverture, ni la fraîcheur, ni l'exploitabilité des données. Tu vas concevoir un SIEM dont tu peux expliquer chaque flux, mesurer chaque rupture et défendre le coût.</p>
+<div class="factbar"><span>Théorie et lectures : <b>5 h</b></span><span>Lab : <b>6 h</b></span><span>Restitution : <b>3 h</b></span><span>Prérequis : <b>01–02</b></span></div>
+<div class="obj"><span class="lab">Capacités visées</span><ul><li>Choisir les frontières de workspaces et de délégation.</li><li>Relier source, transport, transformation, table et détection.</li><li>Tester un filtre avant ingestion et mesurer sa perte de couverture.</li><li>Détecter une source absente, y compris si elle n'a jamais envoyé de données.</li></ul></div></header>
+
+<section id="architecture"><h2>1. Le portail, le moteur et les données</h2>
+<p>Sentinel fournit les fonctions SIEM et SOAR ; Log Analytics porte les tables et leur interrogation ; Defender XDR apporte ses capteurs et sa corrélation. Le portail Defender les rassemble dans une expérience unifiée, mais <strong>une interface commune n'efface pas les frontières de licence, de rétention et de droits</strong>. Voir une table XDR en advanced hunting ne signifie pas que ses événements bruts sont exportés dans ton workspace.</p>
+<figure class="diagram"><ol class="flow"><li><b>Source</b><span>Entra, Azure, OS, tiers</span></li><li><b>Transport</b><span>Diagnostic setting, AMA, API</span></li><li><b>Table</b><span>Schéma, tier, rétention</span></li><li><b>Usage</b><span>Détection, chasse, preuve</span></li></ol><figcaption>Une exigence de détection se traduit en un contrat pour chaque maillon.</figcaption></figure>
+<h3>Quand séparer les workspaces ?</h3>
+<p>Pars d'une architecture simple, puis sépare quand une contrainte l'exige : résidence des données, frontière contractuelle client, contrôle d'accès incompatible, responsabilité d'exploitation. Une région supplémentaire ou une équipe supplémentaire ne justifie pas automatiquement un nouveau workspace. La multiplication ajoute des déploiements de contenu, des requêtes transverses et des points de panne.</p>
+<div class="tbl"><table class="data"><thead><tr><th>Décision</th><th>Gain</th><th>Contrepartie à démontrer</th></tr></thead><tbody>
+<tr><td>Workspace commun</td><td>Corrélation et exploitation simples</td><td>Scoping/RBAC adaptés aux utilisateurs ; pas de mélange contractuellement interdit</td></tr>
+<tr><td>Un workspace par client</td><td>Isolation, propriété et facturation lisibles</td><td>Contenu et santé à gérer chez chaque client</td></tr>
+<tr><td>Plusieurs régions</td><td>Respect d'une contrainte de résidence</td><td>Transferts, corrélations et accès transfrontaliers documentés</td></tr>
+</tbody></table></div>
+<p>Dans le portail unifié, identifie le workspace primaire et les workspaces secondaires, puis vérifie les fonctions disponibles sur chacun. N'extrapole pas une capacité du primaire à tous les secondaires. La migration de portail ne migre pas magiquement les permissions, les playbooks et les intégrations de ticketing.</p>
+<div class="note"><span class="lab">État vérifié au 22 octobre 2026</span>La fin de prise en charge de Sentinel dans le portail Azure est annoncée après le <strong>31 mars 2027</strong>. Depuis le 23 septembre 2026, les nouveaux parcours intègrent l'onboarding du data lake à Sentinel ; la gestion des tiers se fait dans <em>Table management</em>. Le chapitre 12 explique le nouveau parcours Fabric.</div>
+</section>
+
+<section id="collecte"><h2>2. Un connecteur doit avoir un contrat</h2>
+<p>Pour chaque source, écris : propriétaire, périmètre attendu, transport, table de destination, horloge, débit normal, délai admissible, rétention, usages et procédure de reprise. « Logs firewall » est insuffisant. « Tous les événements deny et les sessions sortantes des trois pare-feu de production, dans CommonSecurityLog, avec p95 de latence inférieur à dix minutes » est testable.</p>
+<div class="tbl"><table class="data"><thead><tr><th>Source</th><th>Mécanisme</th><th>Contrôle indispensable</th></tr></thead><tbody>
+<tr><td>AzureActivity / Entra</td><td>Diagnostic settings ou configuration du connecteur</td><td>Abonnements/tenant et catégories réellement exportés</td></tr>
+<tr><td>Windows / Linux</td><td>AMA et association DCR</td><td>Agent sain, DCR associée, sélecteurs d'événements corrects</td></tr>
+<tr><td>CEF</td><td>Émetteur → collecteur Syslog → AMA → CommonSecurityLog</td><td>Parsing CEF et heure source, pas seulement réception du message</td></tr>
+<tr><td>API SaaS</td><td>Connecteur, identité et curseur de pagination</td><td>Permissions, quotas, reprise, gestion des pages et doublons</td></tr>
+</tbody></table></div>
+<h3>Incident de collecte : remonter la chaîne</h3>
+<p>Tu génères un événement identifiable, tu notes son heure UTC et son identifiant, puis tu vérifies sa présence à la source, dans le transport et à destination. S'il existe dans un fichier Syslog local mais pas dans la table, le service distant n'est plus ton premier suspect. S'il arrive avec un champ utilisateur vide, la collecte fonctionne au sens transport, mais le contrat de détection est rompu.</p>
+<p>Les données XDR brutes et les alertes XDR sont deux flux différents. Activer la synchronisation des incidents ne remplit pas nécessairement toutes les tables <code>Device*</code>. Pour chaque table, indique explicitement le moteur où tu l'as interrogée. Cela évite de confondre une table absente avec un résultat négatif.</p></section>
+
+<section id="dcr"><h2>3. Filtrer avant ingestion, sans aveugler le SOC</h2>
+<p>Une transformation d'ingestion travaille sur <code>source</code>. Elle doit produire un schéma compatible avec la table de destination et utiliser les opérateurs pris en charge par ce mécanisme. Ce n'est pas une requête de chasse arbitraire : une jointure historique, un appel réseau ou un score appris sur trente jours n'y ont pas leur place.</p>
+<div class="code"><div class="bar"><span class="ttl">transformKql · exemple Syslog, à tester sur échantillon</span></div><pre>source
+| where Facility in ("auth", "authpriv")
+    or SeverityLevel in ("emerg", "alert", "crit", "err", "warning")</pre></div>
+<p>Ce filtre garde l'authentification, même peu sévère, et les messages de sévérité élevée des autres facilities. Il <strong>supprime</strong> une partie des événements informatifs : certains démarrages de services, changements applicatifs ou traces de persistance pourraient y vivre. La bonne question n'est donc pas « combien de lignes ai-je jetées ? », mais « quelles hypothèses de détection ai-je rendues impossibles ? ».</p>
+<h3>La procédure de changement</h3><ol>
+<li>Conserver un échantillon représentatif avec ses volumes par heure et type.</li>
+<li>Exécuter le filtre en lecture sur cet échantillon ; examiner les événements exclus.</li>
+<li>Rejouer les tests des règles consommatrices sur les deux ensembles.</li>
+<li>Déployer sur une source pilote ; comparer le nombre d'émetteurs, la latence et le volume.</li>
+<li>Versionner la transformation et son rollback. Revenir au filtre précédent ne récupère pas les événements déjà éliminés.</li></ol>
+<div class="why"><span class="lab">Économie réelle</span><p>Les transformations vers des tables Analytics d'un workspace avec Sentinel activé bénéficient d'un traitement tarifaire particulier sans frais de transformation. Cela ne généralise pas la gratuité aux autres plans, au lake ou aux ressources de collecte. Le volume après ingestion ne permet pas, à lui seul, de reconstruire le volume détruit en amont.</p></div>
+</section>
+
+<section id="asim"><h2>4. ASIM : un schéma commun, pas une preuve commune</h2>
+<p>ASIM normalise des événements de fournisseurs différents vers des domaines tels qu'Authentication, DNS ou Network Session. Les parsers unificateurs invoquent les parsers de sources installés. Une règle écrite sur le schéma commun devient plus portable, à condition que les sources pertinentes soient couvertes et que les champs nécessaires soient effectivement renseignés.</p>
+<div class="code"><div class="bar"><span class="ttl">Sentinel · parser Authentication, s'il est installé et alimenté</span></div><pre>_Im_Authentication(starttime=ago(1h), endtime=now())
+| summarize Events=count(), MissingUser=countif(isempty(TargetUsername))
+    by EventVendor, EventProduct, EventResult</pre></div>
+<p>Compare les événements bruts et normalisés sur la même fenêtre. Un échec d'authentification ne doit pas devenir un succès, une IP de proxy ne doit pas être renommée IP utilisateur sans justification, et un identifiant de compte ne doit pas perdre son tenant. Conserve la possibilité de revenir à l'événement source.</p>
+<p>Un parser qui ajoute des colonnes aux bons noms n'est pas forcément conforme. Valide le type, la sémantique, les valeurs autorisées, les champs obligatoires et le traitement des événements non reconnus. Ajoute au moins un test d'entrée mal formée : une ligne rejetée proprement vaut mieux qu'une réussite d'authentification inventée par défaut.</p></section>
+
+<section id="mssp"><h2>5. Déléguer l'accès, industrialiser le contenu</h2>
+<p>Azure Lighthouse délègue des scopes Azure au tenant du prestataire. Il ne donne pas automatiquement accès aux données Microsoft 365, à tous les rôles Entra ou à toutes les fonctions Defender. La gestion multi-tenant Defender repose sur son propre onboarding et ses relations d'accès. <strong>Teste séparément la lecture Azure, le triage XDR et l'exécution des réponses.</strong></p>
+<p>La donnée peut rester stockée chez le client tout en étant exportée par un playbook, un ticket, une requête transversale ou un analyste. La formule « seul l'accès voyage » décrit l'architecture de stockage, pas une garantie d'absence de transferts. Inventorie les destinations des commentaires, pièces jointes et exports.</p>
+<h3>Contenu partagé, paramètres locaux</h3>
+<p>Versionne le cœur des règles une fois et les paramètres client séparément : tables disponibles, identifiants de workspace, seuils, exclusions temporaires, contacts. Une exclusion « serveur de sauvegarde » doit désigner un identifiant vérifié, un motif et une expiration. Un simple nom réutilisé chez deux clients peut créer une exception inter-tenant involontaire.</p>
+<p>Déploie d'abord sur un client pilote, puis par vagues. Les trois contrôles de fin sont distincts : ressource déployée, requête exécutable, alerte obtenue sur test. Le chapitre 10 transforme cette méthode en pipeline.</p></section>
+
+<section id="sante"><h2>6. Surveiller ce qui devrait exister</h2>
+<p>Une requête qui groupe seulement les événements reçus ne peut pas découvrir un émetteur qui n'a jamais envoyé. Il faut une <strong>liste attendue à gauche</strong>, puis une jointure avec les dernières observations. C'est le même principe qu'un inventaire d'actifs : l'absence se mesure par rapport à une attente.</p>
+<div class="code"><div class="bar"><span class="ttl">Log Analytics · exemples de noms à remplacer par ceux du lab</span></div><pre>let Expected = datatable(Computer:string)
+    ["linux-lab-01", "linux-lab-02"];
+let Observed = Syslog
+    | where TimeGenerated &gt; ago(1d)
+    | summarize LastSeen=max(TimeGenerated), Events=count() by Computer;
+Expected
+| join kind=leftouter Observed on Computer
+| extend State=case(isnull(LastSeen), "Jamais vu dans la fenêtre",
+                    LastSeen &lt; ago(2h), "Silencieux", "Récent")
+| project Computer, LastSeen, Events, State</pre></div>
+<p>Cette requête échoue si <code>Syslog</code> n'existe pas : c'est une erreur de contrat à traiter, pas un état « sain ». Le nom de machine doit être normalisé des deux côtés. Pour une source événementielle rare, mesure aussi le heartbeat de l'agent ou génère un événement témoin ; deux heures sans refus de firewall ne constituent pas forcément une panne.</p>
+<div class="code"><div class="bar"><span class="ttl">Log Analytics · volume facturable par type, unité Go décimaux</span></div><pre>Usage
+| where TimeGenerated &gt; ago(7d)
+| where IsBillable == true
+| summarize GB=sum(Quantity) / 1000.0 by DataType
+| order by GB desc</pre></div>
+<p><code>Usage.Quantity</code> est exprimée en Mo. Cette mesure couvre l'ingestion, pas la facture complète : rétention, scans du lake, Logic Apps et machines de collecte s'ajoutent. <code>SentinelHealth</code> et les métriques des connecteurs complètent les contrôles ; aucun de ces outils ne couvre automatiquement toutes les sources.</p></section>
+
+<section id="lab"><h2>Lab guidé — de la source au contrat vérifié</h2>
+<div class="labhead"><span class="lab">6 h · collecte de lab</span><p>Workspace des chapitres 01–02, droits de configuration Sentinel et de DCR sur le périmètre de test. Une VM Linux avec AMA pour la partie Syslog. L'essai Sentinel couvre sous conditions les premiers 10 Go/jour Analytics pendant 31 jours ; VM, automatisations et lake restent à chiffrer.</p></div>
+<div class="step" data-n="1"><h4>Construire la matrice de collecte · 45 min</h4><p>Liste quatre sources : Activity Log, Entra Audit, Entra Sign-in et Syslog. Pour chacune, remplis les onze champs du contrat §2. Dans le portail, vérifie le tenant et le Resource ID du workspace. Si le workspace du chapitre 01 a été supprimé, recrée-le avant de configurer les destinations.</p><div class="expect"><span class="lab">Attendu</span>Quatre lignes, un propriétaire et un événement témoin par ligne ; les sources indisponibles sont marquées comme telles.</div></div>
+<div class="step" data-n="2"><h4>Activer les solutions et les flux · 75 min</h4><span class="click">Defender › Microsoft Sentinel › Content management › <b>Content hub</b> › installer Azure Activity, Microsoft Entra ID et Syslog</span><p>Ouvre ensuite chaque connecteur et suis ses prérequis. Pour Linux, associe la DCR à la VM et sélectionne les facilities/severities utiles. Sur la VM, génère le témoin suivant puis cherche-le dans Syslog. La commande produit un événement local, pas une attaque.</p><div class="code"><div class="bar"><span class="ttl">Terminal Linux de lab</span></div><pre>logger -p auth.notice -t secops-lab "LAB-CH03-auth"
+logger -p user.info -t secops-lab "LAB-CH03-info"</pre></div><p>Vérifie les deux messages <em>avant</em> de poser le filtre. Si la collecte initiale exclut déjà user.info, élargis temporairement le sélecteur du lab pour établir le point de comparaison.</p></div>
+<div class="step" data-n="3"><h4>Tester la transformation · 60 min</h4><p>Dans la configuration DCR appropriée, teste la transformation §3 sur les deux événements. Conserve la version initiale, déploie la variante, puis génère deux nouveaux témoins avec un suffixe différent. Le message auth.notice doit arriver et user.info être exclu. Vérifie aussi que crit reste admis.</p><div class="expect"><span class="lab">Attendu</span>Un tableau « entrée → conservé/exclu → justification », avec heures de génération et réception. Pas de pourcentage d'économie extrapolé à partir de deux lignes.</div></div>
+<div class="step" data-n="4"><h4>Provoquer une source silencieuse · 45 min</h4><p>Ajoute dans Expected un nom d'émetteur inexistant puis exécute §6. Arrête ensuite uniquement la collecte de ta VM de test, selon sa procédure AMA, et raccourcis le seuil de silence à cinq minutes. Observe les deux états : jamais vu et devenu silencieux. Rétablis la collecte et vérifie un nouveau témoin.</p></div>
+<div class="step" data-n="5"><h4>Comparer brut, normalisé et coûts · 60 min</h4><p>Exécute le parser ASIM Authentication si une source compatible est disponible. Note les champs vides et compare cinq événements à la table brute. Calcule les volumes par type sur une période représentative ; une fenêtre trop courte est explicitement « non concluante ». Dessine ensuite une variante MSSP à deux clients avec la frontière des identités et des données.</p></div>
+<div class="step" data-n="6"><h4>Restituer et nettoyer · 75 min</h4><p>Rends la matrice de collecte, les preuves de réception, les tests du filtre, l'alerte de silence et le diagramme. Restaure les sélecteurs et la transformation que tu veux conserver. Supprime les ressources dédiées devenues inutiles et vérifie les coûts des agents/VM. Ne supprime pas le workspace si tu le réutilises au chapitre 04.</p></div>
+<div class="note"><span class="lab">Parcours sans VM</span>Pour le raisonnement de santé, remplace Observed par <code>datatable(Computer:string, LastSeen:datetime, Events:long)["linux-lab-01", datetime(2026-10-20T08:00:00Z), 12]</code> et utilise une référence temporelle fixe. Tu valides la logique de jointure, pas le fonctionnement d'AMA ou du connecteur.</div>
+</section>
+<section id="correction"><h2>Cas corrigé : 40 % d'économie, 100 % d'angle mort ?</h2><p>Un filtre supprime tous les messages de sévérité info. Le volume baisse de 40 %, mais une détection de création de service devient silencieuse. Le connecteur reste vert. Que décides-tu ?</p><details class="answer"><summary>Correction raisonnée</summary><p>La métrique de débit confirme un effet économique, pas la qualité. Identifie les événements nécessaires à la règle, réintroduis leur famille ou construis une exception précise, puis rejoue le test de création de service. Restaure le filtre précédent si le contrôle est critique. Les événements supprimés ne sont récupérables que si une autre copie existe. Ajoute le test à la revue de DCR et documente la période de couverture dégradée.</p></details>
+<div class="trouble"><div class="tbar">Dépannage</div><table><tr><td class="sym">Agent sain, table vide</td><td>Contrôler association DCR, sélecteurs, destination et réception du témoin.</td></tr><tr><td class="sym">Parser ASIM introuvable</td><td>Contrôler solution et parser installés, nom exact et source prise en charge.</td></tr><tr><td class="sym">Accès Sentinel mais pas XDR</td><td>Vérifier séparément la délégation Azure et les permissions Defender.</td></tr></table></div></section>
+<section id="validation"><h2>Validation</h2><div class="check"><span class="lab">Chapitre acquis si tu peux démontrer</span><ul><li>Deux topologies justifiées par une contrainte précise.</li><li>Un événement suivi de la source à sa table, avec latence mesurée.</li><li>Un filtre avec un test positif, négatif et de non-régression.</li><li>Une source jamais vue détectée à partir d'un inventaire attendu.</li><li>La différence entre volume ingéré, couverture et facture totale.</li></ul></div><h3>Glossaire</h3><dl class="gloss"><dt>DCR / association</dt><dd>Règle de collecte et lien qui l'applique à une ressource.</dd><dt>ASIM</dt><dd>Modèle de normalisation et parsers de Sentinel.</dd><dt>Tier / plan</dt><dd>Choix de stockage et capacités associées ; à vérifier dans le parcours du workspace.</dd><dt>SLO de collecte</dt><dd>Objectif mesurable de fraîcheur, complétude et disponibilité des données.</dd></dl></section>
+<section id="refs"><h2>Références officielles</h2><ul class="refs">
+<li><a href="https://learn.microsoft.com/en-us/azure/sentinel/overview">Sentinel et calendrier de migration</a></li><li><a href="https://learn.microsoft.com/en-us/azure/sentinel/normalization">ASIM</a></li><li><a href="https://learn.microsoft.com/en-us/azure/azure-monitor/data-collection/data-collection-transformations">Transformations DCR et facturation</a></li><li><a href="https://learn.microsoft.com/en-us/azure/sentinel/billing">Facturation, essai et sources gratuites</a></li><li><a href="https://learn.microsoft.com/en-us/azure/sentinel/log-plans">Tiers et rétention</a></li><li><a href="https://learn.microsoft.com/en-us/azure/sentinel/whats-new">Évolutions de septembre 2026</a></li></ul></section>
+<div class="pager"><a href="ch02-entra-id.html"><span class="dir">← Chapitre 02</span><span class="ttl2">Entra ID</span></a><a href="ch04-kql-avance.html"><span class="dir">Chapitre 04 →</span><span class="ttl2">KQL avancé</span></a></div>
+<footer>Chapitre 03 · Révision du 22 octobre 2026 · Les exercices synthétiques sont distincts des validations de collecte réelle.</footer>
+</main></div></div></body></html>

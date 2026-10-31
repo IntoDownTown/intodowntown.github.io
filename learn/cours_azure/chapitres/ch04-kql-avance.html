@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Ch. 04 — KQL avancé et patterns de détection</title><link rel="stylesheet" href="../assets/cours.css"><link rel="stylesheet" href="../assets/cours-lab.css"><script src="../assets/cours.js" defer></script></head>
+<body><div id="progress"></div><div class="wrap"><div class="shell">
+<nav class="toc" aria-label="Sommaire du chapitre"><p class="toc-h">Chapitre 04</p><a href="../index.html">← Retour à l’accueil</a><a href="#contrat">1. Contrat de requête</a><a href="#moteur">2. Penser comme le moteur</a><a href="#jointures">3. Jointures et JSON</a><a href="#seuil">4. Seuil</a><a href="#nouveaute">5. Nouveauté</a><a href="#correlation">6. Corrélation</a><a href="#anomalie">7. Anomalie</a><a href="#lab">Lab et corrigés</a><a href="#validation">Validation</a><a href="#refs">Références</a></nav>
+<main><div class="crumb"><a href="../index.html">Cours Azure SecOps</a><span class="sep">/</span>Mois 2 · Chapitre 04</div>
+<header class="chead"><div class="kicker">Semaines 7–8 · ~14 h</div><h1>KQL avancé :<br>faire correspondre une question à une preuve</h1><p class="lead">Une requête rapide qui répond à la mauvaise question reste une mauvaise requête. Ici, tu vas maîtriser la cardinalité, le temps, les clés et quatre motifs de détection avec des jeux de données reproductibles.</p><div class="factbar"><span>Théorie : <b>4 h</b></span><span>Katas et lab : <b>7 h</b></span><span>Restitution : <b>3 h</b></span></div><div class="obj"><span class="lab">Objectifs</span><ul><li>Prévoir le nombre de lignes produit par une jointure.</li><li>Écrire seuil, nouveauté, séquence et anomalie.</li><li>Distinguer limites de la donnée et défauts de la requête.</li><li>Mesurer une optimisation sans changer le résultat métier.</li></ul></div></header>
+
+<section id="contrat"><h2>1. Commencer par le contrat d'exécution</h2><p>Écris au-dessus de chaque requête : <strong>moteur, tables, colonne temporelle, fenêtre UTC, clé d'entité et résultat attendu</strong>. Log Analytics utilise habituellement <code>TimeGenerated</code> ; les tables XDR natives utilisent <code>Timestamp</code>. Une copie XDR dans Log Analytics peut exposer un schéma différent. Vérifie le schéma de la table cible, plutôt que de renommer les colonnes au hasard.</p>
+<p>La fenêtre du sélecteur de temps de l'éditeur peut restreindre celle du texte. Les exemples synthétiques de ce chapitre déclarent leurs données avec <code>datatable</code> ou <code>range</code> : ils ne requièrent pas de connecteur ni de table persistante. Ils nécessitent un éditeur KQL compatible ; ils ne constituent pas un moteur KQL local dans cette page HTML.</p>
+<div class="code"><div class="bar"><span class="ttl">Log Analytics · exploration de schéma, à exécuter séparément</span></div><pre>SigninLogs
+| getschema</pre></div><p>Ensuite, lis quelques lignes et mesure les champs vides. Une identité absente ne doit pas devenir la chaîne « inconnu » puis être jointe à toutes les autres identités absentes. Un résultat partiel, tronqué ou en timeout ne permet pas de conclure à l'absence d'activité.</p></section>
+
+<section id="moteur"><h2>2. Le coût vient du travail imposé au moteur</h2><p>Réduis tôt la période et les lignes pertinentes. Les colonnes inutiles, le JSON parsé sur des millions de lignes et les jointures plusieurs-à-plusieurs coûtent davantage que la beauté de l'indentation. Le moteur optimise déjà certains déplacements de filtres : compare les statistiques d'exécution, pas seulement l'ordre visuel des opérateurs.</p>
+<div class="tbl"><table class="data"><thead><tr><th>Outil</th><th>Bon usage</th><th>Piège</th></tr></thead><tbody><tr><td><code>has</code></td><td>Recherche de termes indexés</td><td>Pas une recherche de sous-chaîne ; <code>credential</code> ne signifie pas <code>credentials</code></td></tr><tr><td><code>contains</code></td><td>Recherche de fragment arbitraire</td><td>Plus coûteuse, mais parfois sémantiquement nécessaire</td></tr><tr><td><code>materialize()</code></td><td>Réutiliser un résultat filtré coûteux</td><td>Cache mémoire limité ; matérialiser une table entière peut aggraver le problème</td></tr><tr><td><code>arg_max()</code></td><td>Conserver la ligne du dernier état</td><td>Égalités temporelles, champs absents et historisation à comprendre</td></tr><tr><td><code>dcount()</code></td><td>Cardinalité approximative scalable</td><td>Un seuil exact à une unité près demande une stratégie de comptage adaptée</td></tr></tbody></table></div>
+<p>Un <code>let</code> nomme une expression, pas forcément un résultat calculé une seule fois. Matérialise seulement après filtrage et projection, puis mesure. Les hints de jointure ne sont pas une décoration : broadcast convient à un petit côté diffusé ; shuffle répartit le travail sur une clé de forte cardinalité. Le meilleur choix dépend des volumes réels.</p></section>
+
+<section id="jointures"><h2>3. Jointures : dessiner les lignes avant de coder</h2><p>Le <code>join</code> par défaut est <code>innerunique</code> : il déduplique la gauche par clé. Ce comportement peut effacer une occurrence dont tu voulais conserver la chronologie. Utilise explicitement <code>inner</code> pour toutes les correspondances, <code>leftouter</code> pour conserver les non-correspondances, <code>leftanti</code> pour l'absence, ou <code>leftsemi</code> pour filtrer sans enrichir.</p>
+<div class="code"><div class="bar"><span class="ttl">KQL autonome · cardinalité vérifiable à la main</span></div><pre>let A = datatable(User:string, Event:string)
+    ["alice", "a1", "alice", "a2", "bob", "b1"];
+let B = datatable(User:string, Group:string)
+    ["alice", "finance", "alice", "admin"];
+A | join kind=inner B on User</pre></div>
+<p>Attendu : quatre lignes pour Alice, aucune pour Bob. Remplace par <code>leftouter</code> : cinq lignes. Avec <code>leftanti</code> : seulement Bob. Ces nombres sont ton test de base avant de joindre deux tables de plusieurs millions de lignes. Pour une relation utilisateur→groupe légitimement multiple, dédupliquer arbitrairement les groupes changerait la question.</p>
+<h3>JSON : préserver le grain d'origine</h3><p><code>mv-expand</code> multiplie les lignes ; deux expansions successives de tableaux indépendants peuvent produire un produit cartésien. Compter ensuite les lignes ne compte plus les événements d'audit. Garde un identifiant d'événement pour retrouver le grain initial.</p>
+<div class="code"><div class="bar"><span class="ttl">Log Analytics · explorer toutes les cibles d'un événement d'audit</span></div><pre>AuditLogs
+| where TimeGenerated &gt; ago(1d)
+| mv-expand Target=TargetResources
+| extend TargetId=tostring(Target.id), TargetType=tostring(Target.type)
+| project TimeGenerated, Id, OperationName, TargetId, TargetType</pre></div>
+<p>Ne présume pas que <code>TargetResources[0]</code> est toujours l'application ou que <code>modifiedProperties[1]</code> est toujours le rôle. Explore le type de cible et le nom de propriété. Une transformation robuste sélectionne par sémantique, pas par position accidentelle.</p></section>
+
+<section id="seuil"><h2>4. Pattern seuil : beaucoup de comptes depuis une IP</h2><p>Hypothèse : une origine produit des échecs d'authentification sur plusieurs identités en peu de temps. On veut compter les <em>comptes en échec</em>, pas tous les comptes qui ont partagé l'IP. Le seuil du lab est volontairement bas ; il ne constitue pas un seuil de production.</p>
+<div class="code"><div class="bar"><span class="ttl">KQL autonome · seuil exact sur trois comptes, fenêtre de 10 min</span></div><pre>let S = datatable(T:datetime, IP:string, User:string, Result:string)
+[
+ datetime(2026-10-20T08:01:00Z), "192.0.2.10", "alice", "50126",
+ datetime(2026-10-20T08:02:00Z), "192.0.2.10", "bob",   "50126",
+ datetime(2026-10-20T08:03:00Z), "192.0.2.10", "carol", "50126",
+ datetime(2026-10-20T08:04:00Z), "192.0.2.10", "alice", "50126",
+ datetime(2026-10-20T08:05:00Z), "192.0.2.20", "dave",  "50126",
+ datetime(2026-10-20T08:06:00Z), "192.0.2.20", "eve",   "0"
+];
+S
+| where Result == "50126"
+| summarize Attempts=count() by IP, User, Window=bin(T, 10m)
+| summarize Targets=count(), Attempts=sum(Attempts) by IP, Window
+| where Targets &gt;= 3</pre></div>
+<div class="expect"><span class="lab">Attendu</span>Une ligne : 192.0.2.10, trois cibles, quatre tentatives, fenêtre 08:00 UTC.</div>
+<p>La double agrégation fournit ici un compte exact des cibles. Pour le transposer : S devient SigninLogs, T devient TimeGenerated, IP devient IPAddress et User devient l'identifiant utilisateur retenu. Vérifie les types du code d'erreur et la disponibilité des identités.</p>
+<div class="pitfall"><span class="lab">La frontière de bin</span><p>Deux échecs à 08:09 et deux à 08:11 peuvent échapper à un seuil de trois par tranche. <code>bin()</code> découpe des fenêtres fixes ; il ne crée pas une fenêtre glissante. Teste cette frontière, puis choisis fenêtres chevauchantes, sessions ou corrélation temporelle selon le besoin. Les succès depuis un NAT partagé ne prouvent pas qu'un compte ciblé a été compromis.</p></div></section>
+
+<section id="nouveaute"><h2>5. Pattern nouveauté : nouveau dans quelle référence ?</h2><p>Une nouveauté est relative à une population, une durée et une couverture. Nouveau pour ce compte n'est pas nouveau pour le tenant. Un historique incomplet produit artificiellement des nouveautés. Sépare la référence et l'observation par une borne unique, sans chevauchement.</p>
+<div class="code"><div class="bar"><span class="ttl">KQL autonome · première origine par identité</span></div><pre>let H = datatable(User:string, IP:string)
+    ["alice", "192.0.2.10", "bob", "192.0.2.20"];
+let Recent = datatable(User:string, IP:string)
+    ["alice", "192.0.2.10", "alice", "198.51.100.24",
+     "bob", "192.0.2.10"];
+Recent
+| join kind=leftanti H on User, IP</pre></div>
+<p>Attendu : Alice depuis 198.51.100.24 et Bob depuis 192.0.2.10. L'IP de Bob est déjà connue globalement mais pas pour Bob. Si tu joins uniquement sur IP, tu changes la détection et tu rates ce cas.</p>
+<div class="code"><div class="bar"><span class="ttl">Defender XDR natif · hash nouveau dans la rétention effectivement disponible</span></div><pre>let Boundary = ago(1d);
+let Known = DeviceProcessEvents
+    | where Timestamp &gt;= ago(30d) and Timestamp &lt; Boundary
+    | where isnotempty(SHA1)
+    | distinct SHA1;
+DeviceProcessEvents
+| where Timestamp &gt;= Boundary
+| where isnotempty(SHA1)
+| join kind=leftanti Known on SHA1
+| summarize Devices=dcount(DeviceId), Example=take_any(FolderPath)
+    by SHA1, FileName</pre></div>
+<p>Ce motif ne vérifie ni la signature du fichier ni sa malveillance. La disponibilité d'un hash varie ; exclure les valeurs vides évite de regrouper des fichiers sans rapport. Enrichis ensuite par certificat, origine, prévalence et processus parent.</p></section>
+
+<section id="correlation"><h2>6. Pattern corrélation : identité, ordre et délai</h2><p>Une jointure relie des lignes ; elle ne démontre pas la causalité. Pour mail→clic→processus, il faut une clé message, une identité normalisée et un délai borné. Une commande exécutée après un clic peut avoir une cause indépendante.</p>
+<div class="code"><div class="bar"><span class="ttl">Defender XDR natif · candidats clic → processus, fenêtre 10 minutes</span></div><pre>let Clicks = UrlClickEvents
+    | where Timestamp &gt; ago(1d)
+    | where ActionType == "ClickAllowed"
+    | extend UserKey=tolower(AccountUpn)
+    | where isnotempty(UserKey)
+    | project ClickTime=Timestamp, UserKey, Url, NetworkMessageId;
+let Processes = DeviceProcessEvents
+    | where Timestamp &gt; ago(1d)
+    | where InitiatingProcessFileName in~ ("outlook.exe", "msedge.exe", "chrome.exe")
+    | extend UserKey=tolower(AccountUpn)
+    | where isnotempty(UserKey)
+    | project ProcessTime=Timestamp, UserKey, DeviceId, FileName,
+              ProcessCommandLine, ProcessUniqueId;
+Clicks
+| join kind=inner Processes on UserKey
+| where ProcessTime &gt;= ClickTime and ProcessTime &lt;= ClickTime + 10m
+| project ClickTime, ProcessTime, UserKey, NetworkMessageId,
+          Url, DeviceId, FileName, ProcessCommandLine, ProcessUniqueId</pre></div>
+<p>Le clic d'un utilisateur ne dit pas sur quel appareil il a exécuté le processus. Vérifie l'appareil dans d'autres traces. Les processus enfants indirects ne sont pas tous capturés par ce filtre de parent immédiat. Plusieurs clics peuvent correspondre au même processus ; conserve d'abord les candidats, puis définis une règle métier d'association plutôt que de supprimer arbitrairement les doublons.</p>
+<h3>Factoriser une logique stable</h3><p>Une fonction KQL doit annoncer ses paramètres et son schéma de sortie. Factorise la normalisation d'identité ou les sélecteurs éprouvés, pas une requête encore exploratoire. Dans Sentinel, une watchlist se joint sur sa <code>SearchKey</code> normalisée ; sa date technique de rafraîchissement n'est pas la date d'expiration métier d'une exception.</p></section>
+
+<section id="anomalie"><h2>7. Pattern anomalie : une référence statistique explicite</h2><p>Un volume de connexions inhabituel n'est pas un volume de données exfiltrées. <code>DeviceNetworkEvents</code> sert à compter des événements réseau, pas à inventer des octets transférés. Pour quantifier un transfert, utilise une source disposant de compteurs adaptés et précise leur sens.</p>
+<div class="code"><div class="bar"><span class="ttl">KQL autonome · pic artificiel, baseline et score inspectables</span></div><pre>range i from 0 to 167 step 1
+| extend T=datetime(2026-10-01T00:00:00Z) + i * 1h,
+         Value=iff(i == 150, 100.0, 10.0 + todouble(i % 5))
+| make-series Connections=sum(Value) default=0
+    on T from datetime(2026-10-01T00:00:00Z)
+    to datetime(2026-10-08T00:00:00Z) step 1h
+| extend (Flags, Scores, Baseline)=series_decompose_anomalies(Connections, 2.5, 0)
+| mv-expand T to typeof(datetime), Connections to typeof(double),
+    Flags to typeof(long), Scores to typeof(double), Baseline to typeof(double)
+| where Flags == 1
+| project T, Connections, Baseline, Scores</pre></div>
+<p>Le point injecté est le 7 octobre à 06:00 UTC. Examine son score et la baseline ; la décision statistique dépend de l'algorithme et des paramètres. Ici, la saisonnalité est désactivée explicitement. Sur des données métier, distingue heures ouvrées, week-ends, croissance et machines nouvelles. Remplir un trou de collecte avec zéro peut fabriquer une anomalie au retour du capteur.</p></section>
+
+<section id="lab"><h2>Lab — quatre motifs, puis quatre contre-exemples</h2><div class="labhead"><span class="lab">7 h · éditeur KQL</span><p>Commence avec les blocs autonomes : aucune licence de capteur nécessaire. Pour les variantes SigninLogs ou Device*, il faut les tables et droits correspondants. Exécute chaque bloc séparément, définition <code>let</code> comprise.</p></div>
+<div class="step" data-n="1"><h4>Prédire avant d'exécuter · 60 min</h4><p>Sur les jeux de jointure, seuil et nouveauté, écris les lignes attendues sur papier. Exécute, compare, puis change une clé à la fois. Conserve les différences ; elles deviennent les tests de ta bibliothèque KQL.</p></div>
+<div class="step" data-n="2"><h4>Construire les cas limites · 90 min</h4><p>Ajoute un utilisateur vide, un doublon, un compte dont la casse change et des événements de part et d'autre d'une frontière de fenêtre. Explique pour chaque cas s'il doit être conservé, ignoré ou signalé comme défaut de qualité. Ne laisse pas ces choix au comportement implicite du langage.</p></div>
+<div class="step" data-n="3"><h4>Tester une corrélation négative · 60 min</h4><p>Crée deux datatables Clicks et Processes avec UserKey et les heures projetées dans §6. Mets un processus une minute avant le clic, un à +5 minutes et un à +11 minutes. La jointure temporelle doit conserver seulement +5. Ajoute un second utilisateur : il ne doit pas se rattacher au premier.</p></div>
+<div class="step" data-n="4"><h4>Expérimenter l'anomalie · 60 min</h4><p>Exécute §7, supprime le pic, puis ajoute douze heures sans données. Compare un trou laissé absent avec une série remplie de zéros. Rédige pourquoi aucune sortie ne signifie « pas d'attaque ».</p></div>
+<div class="step" data-n="5"><h4>Optimiser sans modifier le sens · 90 min</h4><p>Sur une table de lab réelle, mesure une requête avec parsing JSON avant et après filtrage. Note durée, volume parcouru si disponible, nombre de lignes et clés retournées. Fais une exécution d'échauffement puis plusieurs mesures comparables. Un cache chaud ne prouve pas une optimisation algorithmique.</p></div>
+<div class="step" data-n="6"><h4>Restituer · 60 min</h4><p>Rends quatre fichiers KQL, chacun avec contrat, test positif, test négatif et limite connue. Ajoute une fonction enregistrée et, si disponible, une jointure de watchlist. Retire les fonctions et watchlists temporaires après export ; les blocs datatable ne créent aucune ressource.</p></div>
+<details class="answer"><summary>Corrigé — pourquoi ma requête de spray accuse le proxy ?</summary><p>Si tu comptes les utilisateurs distincts sur tous les sign-ins puis les échecs séparément, tu agrèges des utilisateurs légitimes et quelques erreurs depuis une IP NAT. Filtre d'abord les échecs pertinents et compte leurs cibles. Pour rechercher un succès après les échecs, joins aussi sur l'utilisateur et impose l'ordre temporel. Même alors, il reste à qualifier proxy, campagne de test et contexte d'identité.</p></details>
+<details class="answer"><summary>Corrigé — trois lignes avant la jointure, 600 après</summary><p>La clé n'est pas unique à droite, ou elle est vide et rassemble des événements sans relation. Mesure la cardinalité de chaque clé, retire les clés vides de la corrélation, pré-agrège uniquement si la question métier l'autorise. Un <code>distinct *</code> final peut cacher le symptôme tout en conservant des associations erronées.</p></details></section>
+<section id="validation"><h2>Validation et glossaire</h2><div class="check"><span class="lab">Sans recopier les modèles</span><ul><li>Tu écris chaque pattern sur une table imposée en quinze minutes.</li><li>Tu expliques la frontière de bin, innerunique et la multiplication par mv-expand.</li><li>Tu sépares nouveauté, rareté, anomalie et preuve de malveillance.</li><li>Tu fournis une mesure de performance accompagnée d'un contrôle de résultat.</li><li>Tu sais expliquer un zéro résultat sans affirmer l'absence d'activité.</li></ul></div><dl class="gloss"><dt>Grain</dt><dd>Ce que représente une ligne : événement, utilisateur, fenêtre, état.</dd><dt>Cardinalité</dt><dd>Nombre de valeurs distinctes d'une clé ou nombre de relations produites.</dd><dt>Baseline</dt><dd>Référence temporelle ou statistique utilisée pour comparer l'observation.</dd><dt>Leftanti</dt><dd>Conserver les lignes de gauche sans correspondance à droite.</dd></dl></section>
+<section id="refs"><h2>Références</h2><ul class="refs"><li><a href="https://learn.microsoft.com/en-us/kusto/query/best-practices">Bonnes pratiques KQL</a></li><li><a href="https://learn.microsoft.com/en-us/kusto/query/join-operator">Sémantique des jointures</a></li><li><a href="https://learn.microsoft.com/en-us/kusto/query/materialize-function">Materialize et limites mémoire</a></li><li><a href="https://learn.microsoft.com/en-us/kusto/query/series-decompose-anomalies-function">Décomposition d'anomalies</a></li><li><a href="https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-deviceprocessevents-table">Schéma DeviceProcessEvents</a></li><li><a href="https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-urlclickevents-table">Schéma UrlClickEvents</a></li></ul></section>
+<div class="pager"><a href="ch03-sentinel-architecture.html"><span class="dir">← Chapitre 03</span><span class="ttl2">Architecture Sentinel</span></a><a href="ch05-detection-engineering.html"><span class="dir">Chapitre 05 →</span><span class="ttl2">Detection engineering</span></a></div><footer>Chapitre 04 · Révision du 22 octobre 2026 · Les seuils des exercices sont pédagogiques.</footer>
+</main></div></div></body></html>

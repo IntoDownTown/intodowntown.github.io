@@ -1,0 +1,10 @@
+// Moteur : Log Analytics / analytics rule Sentinel. Table : AzureActivity.
+// Fréquence 5 min ; période 20 min. Le budget de retard de 15 min est à mesurer.
+AzureActivity
+| where TimeGenerated >= ago(20m)
+| where ingestion_time() > ago(5m)
+| where OperationNameValue =~ "Microsoft.Authorization/roleAssignments/write"
+| where ActivityStatusValue =~ "Succeeded"
+| summarize arg_max(TimeGenerated, *) by EventDataId
+| project TimeGenerated, Caller, CallerIpAddress, CorrelationId,
+          EventDataId, _ResourceId, OperationNameValue

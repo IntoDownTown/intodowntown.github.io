@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": { "description": "Workspace existant, avec Sentinel activé et AzureActivity alimentée." }
+    },
+    "ruleId": {
+      "type": "string",
+      "defaultValue": "6db8f72a-b60b-4db2-8189-c7d540f56ad1",
+      "metadata": { "description": "Identité stable de la règle : conserver cette valeur entre les versions." }
+    },
+    "enabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": { "description": "Activation après validation de la requête dans le workspace de test." }
+    }
+  },
+  "variables": {
+    "$fxv#0": "// Moteur : Log Analytics / analytics rule Sentinel. Table : AzureActivity.\n// Fréquence 5 min ; période 20 min. Le budget de retard de 15 min est à mesurer.\nAzureActivity\n| where TimeGenerated >= ago(20m)\n| where ingestion_time() > ago(5m)\n| where OperationNameValue =~ \"Microsoft.Authorization/roleAssignments/write\"\n| where ActivityStatusValue =~ \"Succeeded\"\n| summarize arg_max(TimeGenerated, *) by EventDataId\n| project TimeGenerated, Caller, CallerIpAddress, CorrelationId,\n          EventDataId, _ResourceId, OperationNameValue\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.SecurityInsights/alertRules",
+      "apiVersion": "2025-03-01",
+      "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+      "name": "[parameters('ruleId')]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "LAB - Attribution de rôle Azure réussie",
+        "description": "Signal de revue des droits. Une attribution réussie ne démontre pas une compromission. Vérifier le bénéficiaire, le rôle, le scope et le changement autorisé.",
+        "enabled": "[parameters('enabled')]",
+        "severity": "Medium",
+        "query": "[variables('$fxv#0')]",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT20M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionEnabled": false,
+        "suppressionDuration": "PT1H",
+        "tactics": ["Persistence", "PrivilegeEscalation"],
+        "techniques": ["T1098"],
+        "eventGroupingSettings": { "aggregationKind": "AlertPerResult" },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT1H",
+            "matchingMethod": "AllEntities"
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "AzureResource",
+            "fieldMappings": [{ "identifier": "ResourceId", "columnName": "_ResourceId" }]
+          }
+        ],
+        "customDetails": { "Actor": "Caller", "Correlation": "CorrelationId", "Event": "EventDataId" }
+      }
+    }
+  ],
+  "outputs": {
+    "deployedRuleId": {
+      "type": "string",
+      "value": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/alertRules', parameters('ruleId'))]"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+// Jeu entièrement synthétique. Exécuter le bloc entier dans un éditeur KQL.
+// Pas de table à créer, pas d'ingestion, aucune donnée TTE.
+// Remplacer uniquement la dernière ligne par les requêtes proposées au ch. 12.
+let Evidence = datatable(
+    EventTime:datetime, EvidenceId:string, Source:string, Tenant:string,
+    AccountId:string, DeviceId:string, Action:string, Object:string, Details:dynamic)
+[
+ datetime(2026-10-20T08:00:00Z), 'E01', 'Mail', 'LAB-A', 'user-alice', '', 'Delivered', 'mail-001', dynamic({"recipient":"alice@example.test","url":"https://documents.example.test/review"}),
+ datetime(2026-10-20T08:04:00Z), 'E02', 'Click', 'LAB-A', 'user-alice', '', 'ClickAllowed', 'mail-001', dynamic({"ip":"192.0.2.10"}),
+ datetime(2026-10-20T08:06:00Z), 'E03', 'Entra', 'LAB-A', 'user-alice', '', 'SignInSuccess', 'Microsoft Graph', dynamic({"ip":"198.51.100.24","interactive":false,"mfaClaim":true}),
+ datetime(2026-10-20T08:08:00Z), 'E04', 'Audit', 'LAB-A', 'user-alice', '', 'AddAppCredential', 'app-finance', dynamic({"credentialId":"cred-17","result":"success"}),
+ datetime(2026-10-20T08:09:00Z), 'E05', 'Entra', 'LAB-A', 'sp-finance', '', 'AppSignInSuccess', 'app-finance', dynamic({"ip":"198.51.100.24","credentialId":"cred-17"}),
+ datetime(2026-10-20T08:11:00Z), 'E06', 'Endpoint', 'LAB-A', 'user-alice', 'device-01', 'ProcessCreated', 'powershell.exe', dynamic({"processUniqueId":"p-42","command":"Write-Output LAB-SECOPS","parent":"msedge.exe"}),
+ datetime(2026-10-20T08:12:00Z), 'E07', 'EndpointNetwork', 'LAB-A', 'user-alice', 'device-01', 'ConnectionSuccess', '203.0.113.50', dynamic({"processUniqueId":"p-42","port":443}),
+ datetime(2026-10-20T08:14:00Z), 'E08', 'AzureActivity', 'LAB-A', 'sp-finance', '', 'RoleAssignmentWrite', '/lab/storage-finance', dynamic({"role":"Storage Blob Data Reader","result":"Succeeded","correlationId":"corr-8"}),
+ datetime(2026-10-20T08:16:00Z), 'E09', 'Storage', 'LAB-A', 'sp-finance', '', 'GetBlob', '/lab/storage-finance/report.txt', dynamic({"status":200,"responseBytes":4096,"authentication":"OAuth"}),
+ datetime(2026-10-20T08:17:00Z), 'E10', 'Storage', 'LAB-A', 'sp-finance', '', 'GetBlob', '/lab/storage-finance/budget.txt', dynamic({"status":403,"responseBytes":0,"authentication":"OAuth"}),
+ datetime(2026-10-20T08:20:00Z), 'E11', 'Response', 'LAB-A', 'soc-analyst', 'device-01', 'IsolationRequested', 'action-11', dynamic({"state":"Pending"}),
+ datetime(2026-10-20T08:22:00Z), 'E12', 'Response', 'LAB-A', 'soc-analyst', 'device-01', 'IsolationCompleted', 'action-11', dynamic({"state":"Succeeded"}),
+ datetime(2026-10-20T08:23:00Z), 'E13', 'Response', 'LAB-A', 'soc-analyst', '', 'CredentialRemoved', 'app-finance', dynamic({"credentialId":"cred-17"}),
+ datetime(2026-10-20T08:24:00Z), 'E14', 'Entra', 'LAB-A', 'sp-finance', '', 'AppSignInFailure', 'app-finance', dynamic({"ip":"198.51.100.24","reason":"invalid_client"}),
+ datetime(2026-10-20T08:07:00Z), 'E15', 'Audit', 'LAB-A', 'release-bot', '', 'AddAppCredential', 'app-billing', dynamic({"credentialId":"cred-18","result":"success","change":"CHG-LAB-42"}),
+ datetime(2026-10-20T08:10:00Z), 'E16', 'Entra', 'LAB-B', 'user-alice', '', 'SignInSuccess', 'Microsoft Graph', dynamic({"ip":"198.51.100.24","interactive":true}),
+ datetime(2026-10-20T08:05:00Z), 'E17', 'Mail', 'LAB-A', 'user-bob', '', 'Quarantined', 'mail-002', dynamic({"recipient":"bob@example.test","url":"https://documents.example.test/review"}),
+ datetime(2026-10-20T08:19:00Z), 'E18', 'Coverage', 'LAB-A', '', '', 'MissingSource', 'ExchangeMailboxAudit', dynamic({"coverage":"not_exported","since":"2026-10-01"})
+];
+Evidence | order by EventTime asc

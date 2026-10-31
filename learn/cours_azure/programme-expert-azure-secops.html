@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programme Expert — SOC & DevSecOps sur la stack Microsoft (6 mois)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1c; --bg-2:#0d1426; --surface:#121a2e; --surface-2:#18233c;
+  --border:rgba(140,165,210,.14); --border-strong:rgba(140,165,210,.28);
+  --text:#e8eefb; --dim:#9fb0cc; --faint:#6b7c9c;
+  --sky:#4cc6f5; --azure:#4d8df6; --sentinel:#2dd4bf; --defender:#b08bf8;
+  --devops:#7ee787; --hi:#f87171; --med:#fbbf24; --lo:#34d399;
+  --hot:#f5a742; --cold:#5aa9e6;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --disp:'Space Grotesk','IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+  font-size:16.5px;line-height:1.68;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 500px at 85% -5%,rgba(77,141,246,.10),transparent 60%),
+    radial-gradient(800px 600px at -10% 10%,rgba(45,212,191,.07),transparent 55%);
+  background-attachment:fixed;}
+::selection{background:rgba(76,198,245,.28)}
+#progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:60;
+  background:linear-gradient(90deg,var(--azure),var(--sentinel),var(--defender),var(--devops));}
+.wrap{max-width:1200px;margin:0 auto;padding:0 22px;}
+.shell{display:grid;grid-template-columns:1fr;}
+@media(min-width:1100px){.shell{grid-template-columns:250px minmax(0,1fr);gap:52px;align-items:start;}}
+main{max-width:790px;width:100%;padding-bottom:8rem;}
+
+/* TOC */
+.toc{display:none;}
+@media(min-width:1100px){
+  .toc{display:block;position:sticky;top:0;height:100vh;overflow-y:auto;padding:44px 0 40px;}
+  .toc::-webkit-scrollbar{width:6px}.toc::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+}
+.toc .toc-h{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 12px;padding-left:14px;}
+.toc .toc-m{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--sky);margin:16px 0 4px;padding-left:14px;opacity:.85;}
+.toc a{display:block;font-size:13px;color:var(--dim);text-decoration:none;padding:4px 0 4px 14px;
+  border-left:2px solid transparent;line-height:1.35;transition:color .15s,border-color .15s;}
+.toc a .n{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-right:7px;}
+.toc a:hover{color:var(--text)}
+.toc a.active{color:var(--sky);border-left-color:var(--sky);}
+.toc a.active .n{color:var(--sky)}
+
+/* hero */
+.hero{padding:60px 0 30px;border-bottom:1px solid var(--border);}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--sky);margin-bottom:18px;display:flex;align-items:center;gap:10px;}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--sky);}
+.hero h1{font-family:var(--disp);font-weight:600;font-size:clamp(2rem,5.6vw,3.2rem);line-height:1.05;letter-spacing:-.02em;margin:0 0 16px;}
+.hero h1 .grad{background:linear-gradient(100deg,var(--sentinel),var(--sky) 40%,var(--defender) 75%,var(--devops));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.hero p.lead{font-size:1.14rem;color:var(--dim);max-width:62ch;margin:0 0 24px;}
+.meta{display:flex;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:12px;}
+.meta span{border:1px solid var(--border);border-radius:999px;padding:5px 13px;color:var(--dim);background:var(--surface);}
+.meta span b{color:var(--text);font-weight:500;}
+
+/* month band */
+.month{margin:64px 0 0;padding:22px 24px;border:1px solid var(--border);border-radius:14px;
+  background:linear-gradient(120deg,rgba(76,198,245,.06),rgba(176,139,248,.05));
+  display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;}
+.month .mn{font-family:var(--disp);font-weight:700;font-size:2.4rem;line-height:1;
+  background:linear-gradient(140deg,var(--sky),var(--defender));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.month .mt{font-family:var(--disp);font-weight:600;font-size:1.3rem;letter-spacing:-.01em;}
+.month .ms{font-family:var(--mono);font-size:11.5px;color:var(--faint);width:100%;letter-spacing:.06em;}
+
+/* chapter sections */
+section{padding:44px 0;border-bottom:1px solid var(--border);scroll-margin-top:24px;}
+.ch-tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.13em;color:var(--faint);text-transform:uppercase;margin-bottom:10px;display:flex;gap:14px;flex-wrap:wrap;}
+.ch-tag b{color:var(--sky);font-weight:600;}
+.ch-tag .wk{color:var(--defender);}
+h2{font-family:var(--disp);font-weight:600;font-size:clamp(1.5rem,3.4vw,1.95rem);line-height:1.12;letter-spacing:-.015em;margin:0 0 8px;}
+h3{font-family:var(--disp);font-weight:500;font-size:1.16rem;margin:32px 0 8px;letter-spacing:-.01em;}
+h4{font-family:var(--mono);font-weight:600;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--sky);margin:24px 0 6px;}
+p{margin:0 0 14px;color:#dbe4f3;}
+strong{color:#fff;font-weight:600;}
+em{color:var(--dim);}
+.dim{color:var(--dim);}
+.ac{font-family:var(--mono);font-size:.85em;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:#cfe0fb;white-space:nowrap;}
+ul.feat{list-style:none;padding:0;margin:12px 0;}
+ul.feat li{position:relative;padding:6px 0 6px 25px;border-bottom:1px solid var(--border);color:#dbe4f3;}
+ul.feat li:last-child{border-bottom:none;}
+ul.feat li::before{content:"›";position:absolute;left:6px;top:6px;color:var(--sky);font-weight:700;}
+
+/* objectives */
+.obj{border:1px solid var(--border);border-radius:11px;background:var(--surface);padding:16px 20px 10px;margin:18px 0;}
+.obj .lab{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--defender);display:block;margin-bottom:8px;}
+.obj ul{list-style:none;margin:0;padding:0;}
+.obj li{padding:4px 0 4px 24px;position:relative;font-size:.95rem;color:#dbe4f3;}
+.obj li::before{content:"◎";position:absolute;left:2px;color:var(--defender);font-size:.85em;top:6px;}
+
+/* callouts */
+.note{border:1px solid var(--border);border-left:3px solid var(--sky);background:linear-gradient(90deg,rgba(76,198,245,.06),transparent 70%);border-radius:8px;padding:14px 18px;margin:18px 0;font-size:.95rem;}
+.note .lab{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--sky);display:block;margin-bottom:5px;}
+.note.warn{border-left-color:var(--med);background:linear-gradient(90deg,rgba(251,191,36,.06),transparent 70%);}
+.note.warn .lab{color:var(--med);}
+
+/* lab */
+.labx{border:1px solid rgba(126,231,135,.3);border-left:3px solid var(--devops);background:linear-gradient(90deg,rgba(126,231,135,.06),transparent 70%);border-radius:8px;padding:14px 18px 8px;margin:20px 0;font-size:.95rem;}
+.labx .lab{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--devops);display:block;margin-bottom:6px;}
+.labx ol{margin:4px 0 10px;padding-left:20px;}
+.labx li{margin:5px 0;color:#dbe4f3;}
+
+/* validation */
+.check{border:1px dashed var(--border-strong);border-radius:10px;padding:14px 18px 8px;margin:20px 0 4px;background:rgba(255,255,255,.015);}
+.check .lab{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--sentinel);display:block;margin-bottom:7px;}
+.check ul{list-style:none;margin:0 0 8px;padding:0;}
+.check li{padding:4px 0 4px 26px;position:relative;font-size:.93rem;color:var(--dim);}
+.check li::before{content:"☐";position:absolute;left:2px;color:var(--sentinel);top:4px;}
+
+/* tables */
+.tbl{overflow-x:auto;margin:18px 0;border:1px solid var(--border);border-radius:10px;}
+table.data{width:100%;border-collapse:collapse;font-size:.89rem;min-width:540px;}
+table.data th{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:10px 13px;color:var(--faint);background:var(--bg-2);border-bottom:1px solid var(--border-strong);}
+table.data td{padding:10px 13px;border-bottom:1px solid var(--border);color:#dbe4f3;vertical-align:top;}
+table.data tr:last-child td{border-bottom:none;}
+table.data tr:hover td{background:rgba(255,255,255,.015);}
+
+/* code */
+.code{background:#070b16;border:1px solid var(--border);border-radius:10px;margin:16px 0;overflow:hidden;}
+.code .bar{display:flex;align-items:center;gap:8px;padding:7px 13px;border-bottom:1px solid var(--border);background:var(--bg-2);}
+.code .bar .dot{width:8px;height:8px;border-radius:50%;}
+.code .bar .ttl{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em;margin-left:5px;}
+.code pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.8px;line-height:1.6;color:#cdd8ee;}
+.code pre::-webkit-scrollbar{height:7px}.code pre::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px}
+.k{color:#7cc4ff;}.f{color:var(--sentinel);}.s{color:#f6c177;}.c{color:var(--faint);font-style:italic;}.t{color:var(--defender);}.o{color:#ff9e9e;}
+code{font-family:var(--mono);font-size:.85em;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;color:#d6e3fb;}
+
+/* diagrams */
+figure.diagram{margin:24px 0;background:var(--bg-2);border:1px solid var(--border);border-radius:12px;padding:18px 16px 12px;}
+figure.diagram svg{width:100%;height:auto;display:block;}
+figure.diagram figcaption{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}
+figure.diagram figcaption b{color:var(--dim);font-weight:500;}
+.d-box{fill:var(--surface);stroke:var(--border-strong);stroke-width:1;}
+.d-azure{fill:rgba(77,141,246,.13);stroke:var(--azure);}
+.d-sentinel{fill:rgba(45,212,191,.12);stroke:var(--sentinel);}
+.d-defender{fill:rgba(176,139,248,.13);stroke:var(--defender);}
+.d-devops{fill:rgba(126,231,135,.12);stroke:var(--devops);}
+.d-src{fill:rgba(255,255,255,.04);stroke:var(--border-strong);}
+.d-hi{fill:rgba(248,113,113,.14);stroke:var(--hi);}
+.d-lab{fill:var(--text);font-family:var(--sans);font-size:13px;font-weight:500;}
+.d-sub{fill:var(--dim);font-family:var(--mono);font-size:10.5px;}
+.d-cap{fill:var(--faint);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;}
+.d-arr{stroke:var(--faint);stroke-width:1.4;fill:none;}
+.d-arr-sig{stroke:var(--sky);stroke-width:1.6;fill:none;}
+.sev{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:5px;font-weight:600;}
+.sev.h{background:rgba(248,113,113,.16);color:#ffb0b0;border:1px solid rgba(248,113,113,.4);}
+.sev.m{background:rgba(251,191,36,.14);color:#ffd27a;border:1px solid rgba(251,191,36,.38);}
+.sev.l{background:rgba(52,211,153,.14);color:#8ff0c8;border:1px solid rgba(52,211,153,.36);}
+footer{padding:48px 0 30px;color:var(--faint);font-size:.85rem;}
+footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--border);}
+footer a:hover{color:var(--sky);}
+.ref{font-family:var(--mono);font-size:12px;line-height:1.9;}
+.ref a{display:block;color:var(--dim);border:none;}
+</style>
+<link rel="stylesheet" href="assets/cours-lab.css">
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap"><div class="shell">
+
+<nav class="toc" aria-label="Sommaire">
+  <p class="toc-h">Programme · 24 semaines</p>
+  <a href="#intro"><span class="n">§</span>Vue d'ensemble & méthode</a>
+  <p class="toc-m">Mois 1 · Socle plateforme</p>
+  <a href="#ch1"><span class="n">01</span>Azure pour la sécurité</a>
+  <a href="#ch2"><span class="n">02</span>Entra ID : l'identité-périmètre</a>
+  <p class="toc-m">Mois 2 · Le SIEM en profondeur</p>
+  <a href="#ch3"><span class="n">03</span>Architecture Sentinel & MSSP</a>
+  <a href="#ch4"><span class="n">04</span>KQL avancé</a>
+  <p class="toc-m">Mois 3 · Ingénierie de détection</p>
+  <a href="#ch5"><span class="n">05</span>Detection engineering</a>
+  <a href="#ch6"><span class="n">06</span>Threat intel, UEBA & hunting</a>
+  <p class="toc-m">Mois 4 · XDR expert</p>
+  <a href="#ch7"><span class="n">07</span>Defender for Endpoint</a>
+  <a href="#ch8"><span class="n">08</span>Identité, mail & SaaS</a>
+  <p class="toc-m">Mois 5 · Cloud & DevSecOps</p>
+  <a href="#ch9"><span class="n">09</span>Defender for Cloud & posture</a>
+  <a href="#ch10"><span class="n">10</span>DevSecOps & detection-as-code</a>
+  <p class="toc-m">Mois 6 · Opérations expertes</p>
+  <a href="#ch11"><span class="n">11</span>SOAR, IR & échelle MSSP</a>
+  <a href="#ch12"><span class="n">12</span>IA, gouvernance & capstone</a>
+</nav>
+
+<main>
+
+<header class="hero" id="intro">
+  <div class="eyebrow">Programme Expert · SOC + DevSecOps · Stack Microsoft</div>
+  <h1>Six mois pour devenir <span class="grad">référent Azure SecOps</span></h1>
+  <p class="lead">Ce programme prend la suite du cours d'introduction (ton fichier «&nbsp;socle&nbsp;») et le transforme en cursus complet&nbsp;: <strong>12&nbsp;chapitres sur 24&nbsp;semaines</strong>, du contrôle d'accès Azure jusqu'au detection-as-code, calibré pour un profil N3 qui vise le niveau expert&nbsp;— avec la double casquette analyste&nbsp;SOC / DevSecOps assumée dans la structure même du cursus.</p>
+  <div class="meta">
+    <span>Durée&nbsp;: <b>6 mois · 2 ch./mois</b></span>
+    <span>Charge&nbsp;: <b>6–8 h/semaine (~170 h)</b></span>
+    <span>Ratio&nbsp;: <b>50 % labs</b></span>
+    <span>Cible&nbsp;: <b>SC-200 → SC-500</b></span>
+    <span>Révision&nbsp;: <b>23 octobre 2026</b></span>
+  </div>
+
+  <p style="margin-top:20px"><a class="chaplink" href="index.html">Les 12 cours détaillés sont disponibles</a> <a class="chaplink" href="ressources.html">Labs, prérequis et révisions</a></p>
+
+  <h3 style="margin-top:38px">La carte du programme</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 780 250" role="img" aria-label="Frise des six mois du programme avec les douze chapitres et les jalons de certification">
+      <defs><marker id="tl" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+      <line x1="20" y1="140" x2="760" y2="140" stroke="var(--border-strong)" stroke-width="1.5"/>
+      <!-- month blocks -->
+      <g>
+        <rect class="d-azure" x="20" y="52" width="112" height="76" rx="9"/>
+        <text class="d-cap" x="30" y="70" fill="var(--azure)">Mois 1</text>
+        <text class="d-sub" x="30" y="90">01 Azure sécu</text>
+        <text class="d-sub" x="30" y="106">02 Entra ID</text>
+        <rect class="d-sentinel" x="144" y="52" width="112" height="76" rx="9"/>
+        <text class="d-cap" x="154" y="70" fill="var(--sentinel)">Mois 2</text>
+        <text class="d-sub" x="154" y="90">03 Sentinel/MSSP</text>
+        <text class="d-sub" x="154" y="106">04 KQL avancé</text>
+        <rect class="d-sentinel" x="268" y="52" width="112" height="76" rx="9"/>
+        <text class="d-cap" x="278" y="70" fill="var(--sentinel)">Mois 3</text>
+        <text class="d-sub" x="278" y="90">05 Détection eng.</text>
+        <text class="d-sub" x="278" y="106">06 TI · hunting</text>
+        <rect class="d-defender" x="392" y="52" width="112" height="76" rx="9"/>
+        <text class="d-cap" x="402" y="70" fill="var(--defender)">Mois 4</text>
+        <text class="d-sub" x="402" y="90">07 MDE expert</text>
+        <text class="d-sub" x="402" y="106">08 MDI·MDO·MDCA</text>
+        <rect class="d-devops" x="516" y="52" width="112" height="76" rx="9"/>
+        <text class="d-cap" x="526" y="70" fill="var(--devops)">Mois 5</text>
+        <text class="d-sub" x="526" y="90">09 Defender Cloud</text>
+        <text class="d-sub" x="526" y="106">10 DevSecOps</text>
+        <rect class="d-box" x="640" y="52" width="120" height="76" rx="9"/>
+        <text class="d-cap" x="650" y="70" fill="var(--sky)">Mois 6</text>
+        <text class="d-sub" x="650" y="90">11 SOAR · IR</text>
+        <text class="d-sub" x="650" y="106">12 IA · capstone</text>
+      </g>
+      <!-- milestones -->
+      <g>
+        <circle cx="132" cy="140" r="4" fill="var(--azure)"/>
+        <text class="d-sub" x="132" y="166" text-anchor="middle">SC-900</text>
+        <text class="d-sub" x="132" y="181" text-anchor="middle" fill="var(--faint)">(éclair, 1 sem.)</text>
+        <circle cx="504" cy="140" r="4" fill="var(--defender)"/>
+        <text class="d-sub" x="504" y="166" text-anchor="middle">SC-200</text>
+        <text class="d-sub" x="504" y="181" text-anchor="middle" fill="var(--faint)">l'examen métier</text>
+        <circle cx="758" cy="140" r="4" fill="var(--devops)"/>
+        <text class="d-sub" x="740" y="166" text-anchor="middle">SC-500</text>
+        <text class="d-sub" x="740" y="181" text-anchor="middle" fill="var(--faint)">versant ingénierie</text>
+        <circle cx="380" cy="140" r="3" fill="var(--faint)"/>
+        <text class="d-sub" x="380" y="166" text-anchor="middle" fill="var(--faint)">mi-parcours :</text>
+        <text class="d-sub" x="380" y="181" text-anchor="middle" fill="var(--faint)">10 détections en prod</text>
+      </g>
+      <text class="d-cap" x="20" y="216">Fil rouge permanent : 30 min de KQL + 1 incident réel analysé par semaine, dès la semaine 1</text>
+      <text class="d-cap" x="20" y="236" fill="var(--devops)">Fil DevSecOps : le lab du chapitre 10 (repo de règles + CI/CD) se prépare dès le chapitre 5</text>
+    </svg>
+    <figcaption><b>24 semaines, des jalons de compétences.</b> SC-200 peut être préparé après SIEM + XDR ; SC-500 prolonge le volet cloud et IA. AZ-500 a été retiré le 31 août 2026. Compare toujours tes acquis au guide officiel de l'examen.</figcaption>
+  </figure>
+
+  <h3>La méthode (aussi importante que le contenu)</h3>
+  <ul class="feat">
+    <li><strong>Un chapitre = deux semaines</strong>&nbsp;: ~40&nbsp;% de théorie ciblée, ~50&nbsp;% de lab, ~10&nbsp;% de restitution écrite (tu documentes comme si tu formais un N1&nbsp;— c'est le test d'expertise le plus fiable).</li>
+    <li><strong>Ton environnement d'entraînement</strong>&nbsp;: tenant de test avec les licences requises, abonnement Azure et budget d'alerte adapté. L'accès au Developer Program dépend de l'éligibilité. L'essai Sentinel couvre sous conditions 10 Go/jour Analytics pendant 31 jours, pas tous les services annexes. Le budget de 15 € est un seuil d'alerte, pas le coût garanti du cursus ni un plafond de dépenses. Voir le <a href="ressources.html#environnement">mode d'emploi</a>.</li>
+    <li><strong>Fil rouge quotidien</strong>&nbsp;: 30&nbsp;min de KQL (réécrire une requête vue au boulot, résoudre un kata) — la maîtrise du langage est ce qui distingue un N3 d'un expert sur cette stack.</li>
+    <li><strong>Chaque chapitre se termine par une validation</strong>&nbsp;: une liste de capacités concrètes. Tant qu'une case n'est pas cochable <em>de mémoire et en pratique</em>, le chapitre n'est pas fini.</li>
+    <li><strong>Adapte l'ordre à ton terrain</strong>&nbsp;: si un incident réel touche un sujet d'un chapitre futur, avance-le. Le programme est une colonne vertébrale, pas un rail.</li>
+  </ul>
+
+  <div class="note">
+    <span class="lab">Prérequis</span>
+    Le fichier « socle » cité à l'origine n'est pas présent dans ce dossier. Les chapitres 01–04 reprennent les bases utiles : tenant, abonnement, collecte, Sentinel/XDR et KQL. Le portail Azure de Sentinel cesse d'être pris en charge après le 31 mars 2027 ; le parcours lake/Fabric des nouveaux onboardings a évolué en septembre 2026 et est détaillé au chapitre 12.
+  </div>
+</header>
+
+<!-- ==================== MOIS 1 ==================== -->
+<div class="month">
+  <span class="mn">M1</span><span class="mt">Socle plateforme — comprendre ce que tu défends</span>
+  <span class="ms">Semaines 1–4 · L'infrastructure Azure et l'identité : les deux socles de l'investigation cloud</span>
+</div>
+
+<!-- ========== CH 1 ========== -->
+<section id="ch1">
+  <div class="ch-tag"><b>Chapitre 01</b><span class="wk">Semaines 1–2</span><span>Prérequis : cours socle, parties 01–02</span></div>
+  <h2>Azure pour la sécurité : plans de contrôle, journaux, gouvernance</h2>
+  <a class="chaplink" href="chapitres/ch01-azure-plans-journaux.html">⚑ Ouvrir le cours détaillé — théorie approfondie, schémas &amp; lab guidé au clic (~14 h)</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Distinguer control plane et data plane, et savoir quel journal couvre quoi</li>
+      <li>Lire une architecture réseau Azure et localiser les points de télémétrie</li>
+      <li>Manier Azure Policy et comprendre son rôle dans la conformité (NIS2 incluse)</li>
+      <li>Auditer les droits : RBAC, héritage de scopes, PIM pour Azure</li>
+    </ul>
+  </div>
+
+  <h3>Control plane vs data plane : la distinction qui structure tout</h3>
+  <p>Toute action Azure passe par l'un de deux plans, et <strong>chaque plan a ses journaux</strong>. C'est la première question à te poser en investigation cloud&nbsp;: «&nbsp;cette action était-elle une opération de <em>gestion</em> ou un <em>accès aux données</em>&nbsp;?&nbsp;»</p>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Plan</th><th>Ce qui y passe</th><th>Journal</th><th>Table KQL</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Control plane</strong> (ARM)</td><td>Créer/modifier/supprimer des ressources, changer des rôles, régénérer des clés</td><td><strong>Activity Log</strong> (par abonnement, 90 j gratuits, à router vers le workspace)</td><td><code>AzureActivity</code></td></tr>
+        <tr><td><strong>Data plane</strong></td><td>Lire un blob, requêter une base, lire un secret Key Vault</td><td><strong>Resource logs</strong> — à activer explicitement via <em>diagnostic settings</em>, ressource par ressource</td><td><code>AzureDiagnostics</code> ou tables dédiées (<code>StorageBlobLogs</code>, <code>AZKVAuditLogs</code>…)</td></tr>
+        <tr><td><strong>Identité</strong> (Entra)</td><td>Connexions, consentements, changements d'annuaire</td><td>Sign-in / Audit logs Entra</td><td><code>SigninLogs</code>, <code>AuditLogs</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note warn">
+    <span class="lab">Piège d'investigation classique</span>
+    Les <strong>resource logs ne sont pas activés par défaut</strong>. Si personne n'a posé de diagnostic setting sur un Key Vault, tu ne sauras jamais quel secret a été lu pendant la compromission. Réflexe d'expert&nbsp;: vérifier <em>en amont</em> (posture) que les diagnostic settings des ressources critiques pointent vers le workspace — et le vérifier <em>en premier</em> quand tu arrives sur un incident («&nbsp;ai-je seulement la donnée&nbsp;?&nbsp;»).
+  </div>
+
+  <h3>Le réseau Azure, version analyste</h3>
+  <p>Tu n'as pas à concevoir le réseau, mais tu dois le lire. Les objets et leur télémétrie&nbsp;:</p>
+  <ul class="feat">
+    <li><strong>VNet / subnet</strong>&nbsp;— l'espace d'adressage privé. Le peering relie des VNets&nbsp;; un mouvement latéral cloud suit ces liens.</li>
+    <li><strong>NSG</strong> (Network Security Group)&nbsp;— filtrage <strong>stateful</strong> par subnet/carte réseau. Les flow logs sont un mécanisme distinct à activer ; les VNet flow logs succèdent aux NSG flow logs.</li>
+    <li><strong>Azure Firewall</strong>&nbsp;— le pare-feu managé central&nbsp;; logs applicatifs/réseau/DNS riches, table <code>AZFWNetworkRule</code> et associées.</li>
+    <li><strong>Private Endpoint</strong>&nbsp;— fournit un accès privé à un service PaaS. Il ne désactive pas automatiquement l'endpoint public : vérifier les paramètres réseau, le pare-feu et le DNS du service.</li>
+    <li><strong>Bastion / JIT</strong>&nbsp;— accès admin aux VMs sans RDP/SSH exposés. Un port 3389 ouvert au monde reste la première cause de compromission de VM.</li>
+  </ul>
+
+  <h3>Gouvernance : Azure Policy, tags, et le lien conformité</h3>
+  <p><strong>Azure Policy</strong> évalue et impose des règles sur les ressources&nbsp;: <em>audit</em> (constater), <em>deny</em> (bloquer à la création), <em>deployIfNotExists</em> (corriger — ex. poser automatiquement les diagnostic settings). Les policies se groupent en <strong>initiatives</strong>&nbsp;; les standards de conformité (CIS, ISO 27001, et les référentiels utilisés pour NIS2) sont des initiatives prêtes à l'emploi, dont le résultat remonte dans Defender for Cloud (chapitre 09). Pour ton travail NIS2&nbsp;: c'est <em>le</em> mécanisme qui transforme une exigence de journalisation ou de chiffrement en contrôle technique mesurable.</p>
+
+  <h3>RBAC expert : scopes, héritage, PIM</h3>
+  <ul class="feat">
+    <li>Un rôle s'assigne à un <strong>scope</strong> (management group → subscription → RG → ressource) et <strong>hérite vers le bas</strong>. Un <code>Owner</code> au niveau subscription possède tout en dessous — y compris ton workspace Sentinel.</li>
+    <li>Rôles sécurité à connaître par cœur&nbsp;: <code>Microsoft Sentinel Reader / Responder / Contributor</code>, <code>Log Analytics Reader/Contributor</code>, <code>Security Reader/Admin</code>. Et le duo dangereux&nbsp;: <code>Owner</code> et <code>User Access Administrator</code> (droit de donner des droits = escalade).</li>
+    <li><strong>PIM</strong> (Privileged Identity Management)&nbsp;— rôles éligibles, activation bornée et traçable. Distinguer l'audit des rôles Entra et celui des rôles de ressources Azure ; vérifier les traces disponibles plutôt que de supposer que tout est dans AuditLogs.</li>
+  </ul>
+
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · qui a touché aux droits ces 7 derniers jours</span></div>
+<pre><span class="t">AzureActivity</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">7d</span>)
+<span class="k">| where</span> OperationNameValue <span class="o">has</span> <span class="s">"Microsoft.Authorization/roleAssignments"</span>
+<span class="k">| extend</span> action <span class="o">=</span> <span class="f">tostring</span>(<span class="f">split</span>(OperationNameValue, <span class="s">"/"</span>)[<span class="k">2</span>])  <span class="c">// write | delete</span>
+<span class="k">| project</span> TimeGenerated, Caller, action, _ResourceId, ActivityStatusValue
+<span class="k">| sort by</span> TimeGenerated <span class="k">desc</span></pre>
+  </div>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 1–2</span>
+    <ol>
+      <li>Crée ton abonnement perso (offre gratuite) + alerte budget. Déploie un RG, une VM B1s, un Key Vault, un compte de stockage — via le portail d'abord, puis <strong>refais-le en Bicep</strong> (avant-goût du chapitre 10).</li>
+      <li>Route l'Activity Log et les resource logs Key Vault vers le workspace. Pour le trafic réseau, configure séparément les flow logs et leur destination.</li>
+      <li>Lis un secret Key Vault, change un rôle, ouvre un port NSG — puis <strong>retrouve chacune de ces actions en KQL</strong>. C'est l'exercice fondateur : action → trace.</li>
+      <li>Assigne une policy <em>deny</em> (interdire le stockage public) et constate le blocage dans l'Activity Log.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation — tu peux passer au chapitre 02 si…</span>
+    <ul>
+      <li>Tu expliques control/data plane avec un exemple de log pour chacun, sans notes</li>
+      <li>Devant une ressource compromise, tu sais dire en 2 min quelles traces existent (et lesquelles manquent)</li>
+      <li>Tu retrouves toute modification de rôle des 7 derniers jours en une requête</li>
+      <li>Tu as écrit ton premier Bicep fonctionnel, même minimal</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 2 ========== -->
+<section id="ch2">
+  <div class="ch-tag"><b>Chapitre 02</b><span class="wk">Semaines 3–4</span><span>Le chapitre le plus rentable du programme</span></div>
+  <h2>Entra ID : l'identité est le périmètre</h2>
+  <a class="chaplink" href="chapitres/ch02-entra-id.html">⚑ Ouvrir le cours détaillé — jetons, AiTM, persistance applicative &amp; lab guidé (~14 h)</a>
+  <p>Dans le cloud Microsoft, il n'y a plus de pare-feu périmétrique&nbsp;: <strong>le jeton d'accès est le périmètre</strong>. La majorité des intrusions modernes sont des connexions «&nbsp;légitimes&nbsp;» avec des identifiants ou des jetons volés. Un expert SOC Azure est d'abord un expert Entra ID.</p>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Maîtriser les objets d'identité — surtout les identités non humaines</li>
+      <li>Lire un flux OAuth 2.0/OIDC et comprendre ce qu'implique un vol de jeton</li>
+      <li>Auditer des Conditional Access policies et repérer leurs trous</li>
+      <li>Connaître les tables de logs Entra et leurs pièges d'interprétation</li>
+    </ul>
+  </div>
+
+  <h3>Les objets — et pourquoi les identités non humaines sont le vrai sujet</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Objet</th><th>C'est quoi</th><th>Angle attaquant</th></tr></thead>
+      <tbody>
+        <tr><td><strong>User</strong></td><td>Identité humaine (cloud ou synchronisée AD)</td><td>Phishing, password spray, MFA fatigue, AiTM</td></tr>
+        <tr><td><strong>App registration</strong></td><td>La <em>définition</em> d'une application (multi-tenant possible)</td><td>Ajout d'un credential (secret/certificat) par l'attaquant = porte dérobée durable</td></tr>
+        <tr><td><strong>Service principal</strong></td><td>L'<em>instance</em> locale d'une app dans ton tenant, porteuse de permissions</td><td>Permissions Graph excessives (<code>Mail.Read</code> sur tout le tenant…), consent phishing</td></tr>
+        <tr><td><strong>Managed identity</strong></td><td>Identité de ressource Azure, sans secret à gérer</td><td>Vol via la ressource compromise (IMDS), abus de ses droits</td></tr>
+        <tr><td><strong>Groupes / rôles</strong></td><td>Attribution de droits (dont rôles privilégiés Entra)</td><td>Ajout discret à un groupe qui donne un rôle — l'escalade silencieuse</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="lab">Réflexe expert</span>
+    À l'embauche sur un tenant, demande-toi : «&nbsp;qui peut créer des credentials sur des apps, et quelles apps ont des permissions applicatives larges&nbsp;?&nbsp;». L'attaque par identité applicative (type incident Midnight Blizzard/2024) survit aux resets de mots de passe et au MFA — c'est la persistance cloud par excellence.
+  </div>
+
+  <h3>Jetons : ce qu'il faut comprendre d'OAuth 2.0 / OIDC</h3>
+  <ul class="feat">
+    <li><strong>Access token</strong>&nbsp;(≈ 1 h)&nbsp;— le laissez-passer vers une ressource (Graph, ARM…). Volé = utilisable jusqu'à expiration, <em>MFA déjà satisfait</em>.</li>
+    <li><strong>Refresh token</strong>&nbsp;(des jours/semaines)&nbsp;— permet d'obtenir de nouveaux access tokens. Volé = persistance. La parade : révocation de session + politiques de <em>token protection</em>/CAE.</li>
+    <li><strong>Primary Refresh Token (PRT)</strong>&nbsp;— participe au SSO de l'appareil. Son abus dépend aussi des clés et protections liées à l'appareil ; copier le PRT seul ne rend pas automatiquement un autre poste conforme.</li>
+    <li><strong>AiTM</strong> (Adversary-in-the-Middle)&nbsp;— proxy de phishing (Evilginx-like) qui capture le cookie de session <em>après</em> le MFA. Contre-mesures : MFA résistant au phishing (FIDO2/passkeys), Conditional Access exigeant un appareil conforme, détections sur les propriétés de session.</li>
+  </ul>
+
+  <h3>Conditional Access : le moteur de décision — et ses trous</h3>
+  <p>Chaque connexion traverse les <span class="ac">CA</span> policies&nbsp;: <em>si</em> (utilisateur, app, plateforme, localisation, risque) <em>alors</em> (bloquer, exiger MFA, exiger appareil conforme…). Ton rôle d'analyste n'est pas d'écrire les policies mais de <strong>les lire vite</strong> (l'onglet CA d'un sign-in log te dit quelles policies se sont appliquées et pourquoi) et de <strong>repérer les gaps</strong>&nbsp;: protocoles hérités non bloqués (legacy auth = pas de MFA possible), exclusions permanentes («&nbsp;comptes de service&nbsp;» exclus de tout), applications non couvertes, absence de policy sur l'enrôlement MFA lui-même.</p>
+
+  <h3>Les tables, avec leurs pièges</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Table</th><th>Contenu</th><th>Piège</th></tr></thead>
+      <tbody>
+        <tr><td><code>SigninLogs</code></td><td>Connexions interactives des utilisateurs</td><td>Ce n'est qu'un quart du tableau —</td></tr>
+        <tr><td><code>AADNonInteractiveUserSignInLogs</code></td><td>Connexions par jeton (refresh, PRT) — le gros du volume</td><td>C'est <strong>ici</strong> qu'on voit vivre un jeton volé, pas dans SigninLogs</td></tr>
+        <tr><td><code>AADServicePrincipalSignInLogs</code></td><td>Connexions des SP</td><td>Un SP qui se connecte depuis une IP inédite = signal fort</td></tr>
+        <tr><td><code>AuditLogs</code></td><td>Changements d'annuaire (rôles, apps, credentials, CA)</td><td>La persistance de l'attaquant s'y écrit — surveille <code>Add service principal credentials</code>, <code>Update conditional access policy</code></td></tr>
+        <tr><td><code>AADRiskyUsers</code> / <code>AADUserRiskEvents</code></td><td>Signaux Identity Protection (voyage impossible, IP anonyme, fuite de credentials…)</td><td>Un risque «&nbsp;dismissed&nbsp;» sans justification est en soi un événement à revoir</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · nouveau credential posé sur une app (persistance)</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">14d</span>)
+<span class="k">| where</span> OperationName <span class="o">in</span> (<span class="s">"Add service principal credentials"</span>,
+                          <span class="s">"Update application - Certificates and secrets management"</span>)
+<span class="k">| extend</span> acteur <span class="o">=</span> <span class="f">tostring</span>(InitiatedBy.user.userPrincipalName),
+         app    <span class="o">=</span> <span class="f">tostring</span>(TargetResources[<span class="k">0</span>].displayName)
+<span class="k">| project</span> TimeGenerated, acteur, OperationName, app, Result
+<span class="k">| sort by</span> TimeGenerated <span class="k">desc</span></pre>
+  </div>
+
+  <h3>Hybride : là où l'on-prem contamine le cloud</h3>
+  <p>La plupart des tenants sont hybrides via <strong>Entra Connect</strong> (sync AD → Entra). Trois modes d'authentification (PHS — hash sync, PTA — pass-through, fédération ADFS), et un principe d'investigation&nbsp;: <strong>un AD on-prem compromis signifie un cloud présumé compromis</strong> (le serveur de sync et ses comptes à privilèges sont un pivot connu — abus du compte connecteur, Golden SAML côté fédération). Le pont de détection côté on-prem, c'est Defender for Identity (chapitre 08).</p>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 3–4</span>
+    <ol>
+      <li>Sur ton tenant de dev : crée une app registration, un SP, ajoute un secret, donne une permission Graph — puis retrouve chaque étape dans <code>AuditLogs</code>.</li>
+      <li>Écris 3 CA policies (bloquer legacy auth, exiger MFA, bloquer un pays) en <em>report-only</em>, génère des connexions, lis le résultat d'évaluation dans les sign-in logs.</li>
+      <li>Rejoue un password spray (script simple sur tes propres comptes de test) et écris la requête qui le met en évidence par fenêtrage temporel.</li>
+      <li>Restitution : une page « les 5 persistances Entra que je vérifierais en premier sur un tenant inconnu ».</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu expliques access/refresh/PRT et l'attaque AiTM à un N1 en 5 minutes, schéma à l'appui</li>
+      <li>Tu distingues de tête SigninLogs vs NonInteractive et sais où chercher un jeton volé</li>
+      <li>Tu listes ≥ 4 techniques de persistance Entra et leur trace exacte dans AuditLogs</li>
+      <li>Tu sais lire l'évaluation CA d'un sign-in et nommer 3 gaps classiques</li>
+      <li>Jalon : SC-900 passé (ou jugé inutile en connaissance de cause)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== MOIS 2 ==================== -->
+<div class="month">
+  <span class="mn">M2</span><span class="mt">Le SIEM en profondeur — architecture et langage</span>
+  <span class="ms">Semaines 5–8 · Démarre ton essai Sentinel gratuit (10 Go/j, 31 j) en semaine 5 pour couvrir tout le mois</span>
+</div>
+
+<!-- ========== CH 3 ========== -->
+<section id="ch3">
+  <div class="ch-tag"><b>Chapitre 03</b><span class="wk">Semaines 5–6</span><span>Ton contexte MSSP en fait un chapitre prioritaire</span></div>
+  <h2>Architecture Sentinel, ingestion experte & multi-tenant MSSP</h2>
+  <a class="chaplink" href="chapitres/ch03-sentinel-architecture.html">Ouvrir le cours détaillé — collecte, DCR, ASIM et lab MSSP</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Choisir une topologie de workspaces et la défendre (coût, souveraineté, RBAC)</li>
+      <li>Écrire une transformation DCR qui réduit réellement la facture</li>
+      <li>Comprendre ASIM et normaliser une source</li>
+      <li>Maîtriser le modèle MSSP : Lighthouse, portail multi-tenant, workspaces primaire/secondaires</li>
+    </ul>
+  </div>
+
+  <h3>Topologie de workspaces : la décision d'architecte</h3>
+  <p>Règle par défaut Microsoft&nbsp;: <strong>un seul workspace par tenant</strong> quand c'est possible (corrélation maximale, coût simple, un seul déploiement de contenu). On s'en écarte pour de bonnes raisons seulement&nbsp;:</p>
+  <ul class="feat">
+    <li><strong>Souveraineté / résidence</strong>&nbsp;— des données qui doivent rester dans une région précise → un workspace par région.</li>
+    <li><strong>Cloisonnement fort</strong>&nbsp;— entités légales séparées, RBAC irréconciliables. (Le <em>resource-context RBAC</em> et le RBAC par table permettent souvent d'éviter la séparation.)</li>
+    <li><strong>MSSP</strong>&nbsp;— un workspace <em>par client</em>, dans le tenant du client (la donnée reste chez lui), opéré à distance. C'est ton monde&nbsp;: voir plus bas.</li>
+    <li>Dans le portail Defender : un workspace <strong>primaire</strong> (celui qui fusionne ses incidents avec Defender XDR) + des <strong>secondaires</strong> consultables. Le choix du primaire est structurant.</li>
+    </ul>
+
+  <h3>Ingestion experte : la DCR comme levier n°1</h3>
+  <p>Tu as vu le principe au socle&nbsp;; ici on passe au niveau opérationnel. Une transformation DCR est une requête KQL (restreinte) appliquée à la volée sur <code>source</code>. Cas d'usage réels&nbsp;:</p>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">transformKql · filtrer le bruit Syslog avant facturation</span></div>
+<pre><span class="c">// Ne garder que les événements auth et priorité haute ; jeter le reste</span>
+source
+<span class="k">| where</span> Facility <span class="o">in</span> (<span class="s">"auth"</span>, <span class="s">"authpriv"</span>) <span class="o">or</span> SeverityLevel <span class="o">in</span> (<span class="s">"emerg"</span>, <span class="s">"alert"</span>, <span class="s">"crit"</span>, <span class="s">"err"</span>, <span class="s">"warning"</span>)</pre>
+  </div>
+  <ul class="feat">
+    <li><strong>Filtrage</strong> (le plus rentable)&nbsp;: sur des sources verbeuses, 40–70&nbsp;% de réduction est courant sans perte de valeur détection.</li>
+    <li><strong>Masquage</strong>&nbsp;: rédaction de données personnelles à l'ingestion (argument RGPD/NIS2 apprécié des DPO).</li>
+    <li><strong>Enrichissement/normalisation</strong>&nbsp;: renommer, parser, typer — en préparation d'ASIM.</li>
+    <li>Rappel économique : sur les tables analytics d'un workspace Sentinel, la transformation est <strong>gratuite</strong> quel que soit le volume filtré.</li>
+  </ul>
+
+  <h3>ASIM : la normalisation qui rend ton contenu portable</h3>
+  <p>L'<span class="ac">ASIM</span> (Advanced Security Information Model) est la couche de normalisation de Sentinel&nbsp;: des <strong>schémas unifiés</strong> par domaine (Authentication, Process, Network Session, DNS, File, Web…) et des <strong>parsers</strong> (<code>_Im_Authentication</code>, <code>_Im_NetworkSession</code>…) qui traduisent chaque source vers le schéma commun. Écris ta détection sur <code>_Im_Authentication</code> et elle marche pour Entra, AD on-prem, Okta, AWS — sans réécriture. Pour un MSSP qui déploie le même contenu chez N clients aux parcs hétérogènes, ASIM n'est pas un luxe, c'est la condition de l'industrialisation.</p>
+
+  <h3>Le modèle MSSP : opérer les tenants des autres</h3>
+  <ul class="feat">
+    <li><strong>Azure Lighthouse</strong>&nbsp;— la délégation inter-tenant côté Azure&nbsp;: le client «&nbsp;projette&nbsp;» ses abonnements/RG vers ton tenant MSSP avec des rôles précis. Tes analystes voient tous les workspaces clients depuis leur propre identité, requêtent en <em>cross-workspace</em>, sans compte chez le client.</li>
+    <li><strong>Portail Defender multi-tenant</strong> (<code>mto.security.microsoft.com</code>)&nbsp;— la vue agrégée côté XDR/portail unifié&nbsp;: incidents, hunting et <em>cases</em> à travers les tenants clients (via GDAP/B2B). C'est la réponse Microsoft au « single pane » MSSP dans le monde unifié.</li>
+    <li><strong>Séparation du contenu</strong>&nbsp;— tes règles «&nbsp;maison&nbsp;» (ta propriété intellectuelle) se déploient depuis ton repo central vers les workspaces clients (chapitre 10, Repositories) plutôt que d'être éditées à la main chez chacun.</li>
+    <li><strong>KQL cross-workspace</strong>&nbsp;: <code>workspace("client-a").SigninLogs</code> — et ses limites (perfs, nombre de workspaces par requête) qui justifient les règles déployées localement plutôt qu'une méga-règle centrale.</li>
+  </ul>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 300" role="img" aria-label="Architecture MSSP : le tenant MSSP accède via Lighthouse et le portail multi-tenant aux workspaces Sentinel restés dans les tenants clients">
+      <defs><marker id="am" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--sky)"/></marker></defs>
+      <rect class="d-defender" x="20" y="30" width="250" height="240" rx="12"/>
+      <text class="d-cap" x="38" y="54" fill="var(--defender)">Tenant MSSP (le tien)</text>
+      <rect class="d-box" x="38" y="66" width="214" height="44" rx="8"/>
+      <text class="d-lab" x="145" y="85" text-anchor="middle" font-size="12">Analystes N1–N3</text>
+      <text class="d-sub" x="145" y="101" text-anchor="middle">une identité, tous les clients</text>
+      <rect class="d-box" x="38" y="120" width="214" height="40" rx="8"/>
+      <text class="d-lab" x="145" y="138" text-anchor="middle" font-size="12">Portail multi-tenant</text>
+      <text class="d-sub" x="145" y="153" text-anchor="middle">incidents · hunting · cases</text>
+      <rect class="d-devops" x="38" y="170" width="214" height="40" rx="8"/>
+      <text class="d-lab" x="145" y="188" text-anchor="middle" font-size="12">Repo de contenu central</text>
+      <text class="d-sub" x="145" y="203" text-anchor="middle">règles maison · CI/CD (ch. 10)</text>
+      <rect class="d-box" x="38" y="220" width="214" height="36" rx="8"/>
+      <text class="d-sub" x="145" y="242" text-anchor="middle">Azure Lighthouse — délégation</text>
+      <!-- clients -->
+      <g>
+        <rect class="d-azure" x="360" y="30" width="400" height="70" rx="10"/>
+        <text class="d-cap" x="376" y="52" fill="var(--azure)">Tenant Client A</text>
+        <rect class="d-sentinel" x="376" y="60" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="466" y="79" text-anchor="middle">Workspace Sentinel A</text>
+        <rect class="d-defender" x="566" y="60" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="656" y="79" text-anchor="middle">Defender XDR A</text>
+        <rect class="d-azure" x="360" y="115" width="400" height="70" rx="10"/>
+        <text class="d-cap" x="376" y="137" fill="var(--azure)">Tenant Client B</text>
+        <rect class="d-sentinel" x="376" y="145" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="466" y="164" text-anchor="middle">Workspace Sentinel B</text>
+        <rect class="d-defender" x="566" y="145" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="656" y="164" text-anchor="middle">Defender XDR B</text>
+        <rect class="d-azure" x="360" y="200" width="400" height="70" rx="10"/>
+        <text class="d-cap" x="376" y="222" fill="var(--azure)">Tenant Client C…</text>
+        <rect class="d-sentinel" x="376" y="230" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="466" y="249" text-anchor="middle">Workspace Sentinel C</text>
+        <rect class="d-defender" x="566" y="230" width="180" height="30" rx="7"/>
+        <text class="d-sub" x="656" y="249" text-anchor="middle">Defender XDR C</text>
+      </g>
+      <path class="d-arr-sig" d="M270,140 L330,140 L330,65 L360,65" marker-end="url(#am)"/>
+      <path class="d-arr-sig" d="M330,140 L330,150 L360,150" marker-end="url(#am)"/>
+      <path class="d-arr-sig" d="M330,150 L330,235 L360,235" marker-end="url(#am)"/>
+      <text class="d-sub" x="312" y="126" text-anchor="middle" fill="var(--sky)">accès</text>
+      <text class="d-sub" x="20" y="292">Stockage chez le client ; exports, résultats de requête et destinations des playbooks à gouverner.</text>
+    </svg>
+    <figcaption><b>Le modèle MSSP Microsoft.</b> Lighthouse délègue l'accès Azure/Sentinel&nbsp;; le portail multi-tenant agrège la vue unifiée&nbsp;; le contenu se déploie depuis un repo central.</figcaption>
+  </figure>
+
+  <h3>Santé & observabilité de la collecte</h3>
+  <p>Un SIEM qui n'ingère plus est pire qu'un SIEM absent (fausse assurance). Instruments&nbsp;: la table <code>SentinelHealth</code>, le monitoring des connecteurs, la nouvelle vue <em>table insights</em> du data lake (volumes par table, variations semaine/semaine, connecteurs silencieux), et une détection maison «&nbsp;source muette&nbsp;» — un simple <code>make-series</code> sur le volume par table avec alerte sur chute anormale. Chez un MSSP, c'est un SLA.</p>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 5–6</span>
+    <ol>
+      <li>Active Sentinel (essai gratuit) sur ton workspace. Branche : Entra ID, Activity Log, Defender XDR (si tenant dev E5), et une source Syslog/CEF depuis une VM Linux.</li>
+      <li>Pose une transformation DCR sur la source Syslog ; mesure le volume avant/après via la table <code>Usage</code> (objectif chiffré : −40 %).</li>
+      <li>Requête la même donnée via la table brute puis via le parser ASIM correspondant ; note les différences de schéma.</li>
+      <li>Écris la détection « table muette depuis 2 h » et teste-la en coupant l'agent.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu défends une topologie de workspaces en entretien (mono vs multi vs MSSP) avec les critères</li>
+      <li>Ta transformation DCR réduit le volume de façon mesurée et documentée</li>
+      <li>Tu expliques Lighthouse vs portail multi-tenant (qui donne quoi, à quel niveau)</li>
+      <li>Tu sais dire en 5 min comment tu détecterais l'arrêt silencieux d'une source</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 4 ========== -->
+<section id="ch4">
+  <div class="ch-tag"><b>Chapitre 04</b><span class="wk">Semaines 7–8</span><span>Le multiplicateur de tout le reste</span></div>
+  <h2>KQL avancé : penser comme le moteur</h2>
+  <a class="chaplink" href="chapitres/ch04-kql-avance.html">Ouvrir le cours détaillé — quatre patterns, jeux synthétiques et corrigés</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Comprendre le modèle d'exécution Kusto pour prédire la performance</li>
+      <li>Maîtriser joins, mv-expand, fonctions, materialize, séries temporelles</li>
+      <li>Savoir écrire les 4 patterns de détection : seuil, nouveauté, corrélation, anomalie</li>
+    </ul>
+  </div>
+
+  <h3>Le modèle d'exécution en 4 idées</h3>
+  <ul class="feat">
+    <li><strong>Stockage en colonnes, partitionné par temps</strong> (extents) → filtrer <code>TimeGenerated</code> d'abord élimine des partitions entières&nbsp;; <code>project</code> tôt réduit les colonnes lues.</li>
+    <li><strong>Recherche par termes indexés</strong> → <code>has</code> (mot entier, indexé) bat <code>contains</code> (sous-chaîne, scan). <code>has_any</code>/<code>has_all</code> pour les listes.</li>
+    <li><strong>Le coût du join dépend des volumes et de la cardinalité</strong> → réduire les entrées, choisir les clés et mesurer le plan ; la petite table à gauche est une recommandation fréquente, pas une description universelle du moteur.</li>
+    <li><strong>Chaque référence à une sous-requête la ré-exécute</strong> → <code>let x = materialize(...)</code> pour calculer une fois, réutiliser N fois.</li>
+  </ul>
+
+  <h3>L'arsenal d'opérateurs au-delà du socle</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Outil</th><th>Sert à</th><th>Note d'expert</th></tr></thead>
+      <tbody>
+        <tr><td><code>join kind=...</code></td><td>inner, leftouter, <strong>leftanti</strong> (absents), <strong>rightsemi</strong>…</td><td><code>leftanti</code> = le pattern « jamais vu avant » ; par défaut kind=innerunique déduplique la gauche — piège classique</td></tr>
+        <tr><td><code>mv-expand</code> / <code>mv-apply</code></td><td>Éclater un tableau JSON en lignes / le traiter par sous-requête</td><td>Indispensable sur les colonnes dynamiques (Entra, e-mails, DeviceEvents)</td></tr>
+        <tr><td><code>parse</code> / <code>extract</code> / <code>parse_json</code></td><td>Extraire des champs de texte/JSON</td><td><code>parse</code> par motif est plus lisible et souvent plus rapide que la regex</td></tr>
+        <tr><td><code>arg_max()/arg_min()</code></td><td>La ligne la plus récente/ancienne par groupe</td><td>« Dernier état connu de chaque machine » en une ligne</td></tr>
+        <tr><td><code>make-series</code> + <code>series_decompose_anomalies()</code></td><td>Séries temporelles + détection d'anomalies intégrée</td><td>La base des détections statistiques sans ML externe</td></tr>
+        <tr><td><code>let</code>, fonctions, <code>externaldata()</code>, <code>_GetWatchlist()</code></td><td>Factoriser, référencer des listes externes/watchlists</td><td>Une logique répétée 3 fois = une fonction enregistrée</td></tr>
+        <tr><td><code>evaluate</code> plugins</td><td><code>pivot</code>, <code>bag_unpack</code>, <code>autocluster</code>…</td><td><code>autocluster</code> trouve les motifs dominants d'un lot d'événements — très utile en triage de masse</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Les 4 patterns de détection à savoir écrire les yeux fermés</h3>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">1 · seuil fenêtré — password spray (N cibles depuis 1 IP)</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1h</span>) <span class="o">and</span> ResultType <span class="o">in</span> (<span class="s">"50126"</span>, <span class="s">"50053"</span>)
+<span class="k">| summarize</span> cibles <span class="o">=</span> <span class="f">dcount</span>(UserPrincipalName), tentatives <span class="o">=</span> <span class="f">count</span>()
+    <span class="k">by</span> IPAddress, <span class="f">bin</span>(TimeGenerated, <span class="k">10m</span>)
+<span class="k">| where</span> cibles <span class="o">&gt;</span> <span class="k">15</span>   <span class="c">// beaucoup de comptes, peu d'essais chacun = spray</span></pre>
+  </div>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">2 · Defender XDR natif — hash nouveau, signature non vérifiée</span></div>
+<pre>let Boundary = ago(1d);
+let historique = DeviceProcessEvents
+    | where Timestamp &gt;= ago(30d) and Timestamp &lt; Boundary
+    | where isnotempty(SHA1)
+    | distinct SHA1;
+DeviceProcessEvents
+| where Timestamp &gt;= Boundary and isnotempty(SHA1)
+| join kind=leftanti historique on SHA1
+| summarize machines=dcount(DeviceId), exemple=take_any(FolderPath) by SHA1, FileName
+| where machines &lt; 3 // Rare dans l'historique disponible, pas nécessairement malveillant.</pre>
+  </div>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">3 · corrélation multi-tables — mail → clic → processus</span></div>
+<pre>// Defender XDR natif : candidats temporels, causalité à vérifier.
+let clics = UrlClickEvents
+    | where Timestamp &gt; ago(1d) and ActionType == "ClickAllowed"
+    | extend UserKey=tolower(AccountUpn)
+    | where isnotempty(UserKey)
+    | project clic_t=Timestamp, UserKey, Url;
+DeviceProcessEvents
+| where Timestamp &gt; ago(1d)
+| where InitiatingProcessFileName in~ ("outlook.exe", "msedge.exe", "chrome.exe")
+| extend UserKey=tolower(AccountUpn)
+| where isnotempty(UserKey)
+| join kind=inner clics on UserKey
+| where Timestamp &gt;= clic_t and Timestamp &lt;= clic_t + 10m
+| project clic_t, UserKey, Url, Timestamp, FileName, ProcessCommandLine</pre>
+  </div>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">4 · XDR natif — nombre d'événements réseau, pas volume en octets</span></div>
+<pre>DeviceNetworkEvents
+| where Timestamp &gt; ago(14d) and RemoteIPType == "Public"
+| make-series conn=count() on Timestamp step 1h by DeviceId
+| extend (anomalies, score, baseline)=series_decompose_anomalies(conn, 2.5)
+| mv-expand Timestamp to typeof(datetime), anomalies to typeof(long), score to typeof(double)
+| where anomalies == 1 and score &gt; 3</pre>
+  </div>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 7–8</span>
+    <ol>
+      <li>Réécris 5 requêtes que tu utilises au travail en appliquant les règles de perf ; mesure le temps d'exécution avant/après (affiché dans l'éditeur).</li>
+      <li>Implémente les 4 patterns sur tes données de lab, puis une variante de chacun sans regarder le modèle.</li>
+      <li>Crée 2 fonctions enregistrées (ex : <code>ConnexionsRisquees(fenetre)</code>) et une requête consommant une watchlist.</li>
+      <li>Kata quotidien : un exercice KQL/jour (dépôts communautaires type KC7, Kusto Detective Agency).</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu écris les 4 patterns de mémoire, sur une table imposée, en &lt; 15 min chacun</li>
+      <li>Tu expliques pourquoi une requête donnée est lente et la corriges</li>
+      <li>Tu connais les pièges de join (innerunique, taille de la gauche) et de mv-expand</li>
+      <li>Jalon mi-parcours amorcé : tes premières détections candidates sont identifiées</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== MOIS 3 ==================== -->
+<div class="month">
+  <span class="mn">M3</span><span class="mt">Ingénierie de détection — passer de consommateur à producteur</span>
+  <span class="ms">Semaines 9–12 · C'est ici que se joue la différence N3 → expert : tu ne tries plus des règles, tu les conçois</span>
+</div>
+
+<!-- ========== CH 5 ========== -->
+<section id="ch5">
+  <div class="ch-tag"><b>Chapitre 05</b><span class="wk">Semaines 9–10</span><span>Cœur de métier</span></div>
+  <h2>Detection engineering : cycle de vie, qualité, plateforme</h2>
+  <a class="chaplink" href="chapitres/ch05-detection-engineering.html">Ouvrir le cours détaillé — contrats, retard, recette et portefeuille de règles</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Dérouler le cycle complet : hypothèse → requête → test → prod → métriques</li>
+      <li>Maîtriser les subtilités des analytics rules (lookback, latence, grouping)</li>
+      <li>Choisir en connaissance de cause entre analytics rule et custom detection</li>
+      <li>Piloter la couverture MITRE ATT&CK comme un portefeuille</li>
+    </ul>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 170" role="img" aria-label="Cycle de vie d'une détection : hypothèse, développement, test, production, métriques, et boucle de tuning">
+      <defs><marker id="a5b" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--sky)"/></marker></defs>
+      <rect class="d-box" x="16" y="40" width="130" height="54" rx="9"/><text class="d-lab" x="81" y="62" text-anchor="middle" font-size="12">Hypothèse</text><text class="d-sub" x="81" y="79" text-anchor="middle">TTP · CTI · incident</text>
+      <rect class="d-sentinel" x="172" y="40" width="130" height="54" rx="9"/><text class="d-lab" x="237" y="62" text-anchor="middle" font-size="12">Développement</text><text class="d-sub" x="237" y="79" text-anchor="middle">KQL + entités + MITRE</text>
+      <rect class="d-devops" x="328" y="40" width="130" height="54" rx="9"/><text class="d-lab" x="393" y="62" text-anchor="middle" font-size="12">Test</text><text class="d-sub" x="393" y="79" text-anchor="middle">simulation atomique</text>
+      <rect class="d-defender" x="484" y="40" width="130" height="54" rx="9"/><text class="d-lab" x="549" y="62" text-anchor="middle" font-size="12">Production</text><text class="d-sub" x="549" y="79" text-anchor="middle">via repo/CI-CD (ch.10)</text>
+      <rect class="d-box" x="640" y="40" width="124" height="54" rx="9"/><text class="d-lab" x="702" y="62" text-anchor="middle" font-size="12">Métriques</text><text class="d-sub" x="702" y="79" text-anchor="middle">FP · volume · MTTA</text>
+      <path class="d-arr-sig" d="M146,67 L172,67" marker-end="url(#a5b)"/>
+      <path class="d-arr-sig" d="M302,67 L328,67" marker-end="url(#a5b)"/>
+      <path class="d-arr-sig" d="M458,67 L484,67" marker-end="url(#a5b)"/>
+      <path class="d-arr-sig" d="M614,67 L640,67" marker-end="url(#a5b)"/>
+      <path class="d-arr" style="stroke:var(--med)" d="M702,94 L702,130 L237,130 L237,94" marker-end="url(#a5b)"/>
+      <text class="d-sub" x="470" y="146" text-anchor="middle" fill="var(--med)">boucle de tuning permanente — une détection sans métriques est une opinion</text>
+    </svg>
+    <figcaption><b>Le cycle de vie.</b> Note la flèche retour&nbsp;: la production n'est pas la fin, c'est le début de la mesure.</figcaption>
+  </figure>
+
+  <h3>Les subtilités qui font les vraies règles</h3>
+  <ul class="feat">
+    <li><strong>Lookback vs fréquence</strong>&nbsp;— une règle « toutes les 5 min sur les 60 dernières min » revoit 12 fois les mêmes événements : prévois la déduplication (grouping) ou aligne fenêtre et fréquence.</li>
+    <li><strong>Latence d'ingestion</strong>&nbsp;— l'événement arrive au workspace quelques minutes après sa génération (<code>ingestion_time()</code> vs <code>TimeGenerated</code>). Une règle trop « collée » au présent rate des événements. Marge classique : décaler la fenêtre de 5–10 min.</li>
+    <li><strong>Entity mapping complet</strong>&nbsp;— chaque entité mappée (compte, host, IP, fichier…) devient un point de corrélation et alimente l'UEBA. Une règle sans entités produit des alertes orphelines.</li>
+    <li><strong>Custom details & alert details</strong>&nbsp;— remonte les champs utiles au triage <em>dans</em> l'alerte (la commande exacte, l'URL) : chaque clic évité au N1 se compte en minutes de MTTA.</li>
+    <li><strong>Alert grouping</strong>&nbsp;— regrouper par entité sur une fenêtre pour transformer 50 alertes en 1 incident dense.</li>
+  </ul>
+
+  <h3>Analytics rule ou custom detection ? La décision 2026</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Critère</th><th>Analytics rule (Sentinel)</th><th>Custom detection (Defender)</th></tr></thead>
+      <tbody>
+        <tr><td>Données visées</td><td>Toutes les tables du workspace (tiers, ASIM, sources custom)</td><td>Tables advanced hunting XDR + données Sentinel du portail unifié</td></tr>
+        <tr><td>Fréquence</td><td>Planifiée (≥5 min) ou NRT</td><td>Continu/NRT natif ; quelques limites en preview sur les données purement Sentinel</td></tr>
+        <tr><td>Actions</td><td>Via automation rules + playbooks</td><td>Actions de remédiation Defender intégrées (isoler, bloquer fichier…)</td></tr>
+        <tr><td>Entités</td><td>Mapping à configurer</td><td>Colonnes d'identification à préserver ; mapping à vérifier selon les sources</td></tr>
+        <tr><td>Gestion as-code</td><td>ARM/Bicep et Repositories</td><td>Repositories et extension MicrosoftSecurity en preview, avec limitations</td></tr>
+        <tr><td>Sens du vent</td><td>Reste le socle multi-sources</td><td>Poussé par Microsoft comme l'expérience unifiée d'avenir</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Heuristique pratique</strong>&nbsp;: signal endpoint/mail/identité XDR avec action de réponse native → custom detection. Corrélation multi-sources, sources tierces, ASIM, logique fine de scheduling → analytics rule. Et dans les deux cas : versionnée dans le repo (chapitre 10), jamais éditée à la main en prod.</p>
+
+  <h3>Qualité : mesurer comme un ingénieur</h3>
+  <ul class="feat">
+    <li><strong>Taux de faux positifs</strong> par règle (incidents fermés « FP » / total) — au-delà de ~70–80 % de FP, la règle coûte plus qu'elle ne rapporte : tuner ou déclasser en hunting.</li>
+    <li><strong>Volume</strong> — une règle qui n'a jamais tiré en 90 j : cassée, ou théâtre de sécurité ? Tester par simulation avant de conclure.</li>
+    <li><strong>Couverture MITRE</strong> — la matrice n'est pas un objectif de complétude (100 % est un non-sens) mais un outil de <em>priorisation par la menace</em> : couvre d'abord les techniques des acteurs qui visent ton secteur.</li>
+    <li><strong>Tests reproductibles</strong> — chaque règle livrée avec sa procédure de déclenchement (commande Atomic Red Team, script) rejouable après chaque modification. C'est du test unitaire de détection.</li>
+  </ul>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 9–10</span>
+    <ol>
+      <li>Développe 3 détections de bout en bout (ex : persistance par tâche planifiée, consent grant illicite, exfiltration DNS) : hypothèse écrite, requête, entités, MITRE, test atomique, doc de triage pour N1.</li>
+      <li>Déclenche chacune réellement (Atomic Red Team sur ta VM de lab) et vérifie l'incident produit, les entités, le grouping.</li>
+      <li>Reprends une règle bruyante de ton environnement pro : mesure son taux de FP, propose un tuning chiffré.</li>
+      <li>Construis ta matrice MITRE de couverture (le portail le fait, mais refais-la toi-même une fois pour comprendre).</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tes 3 détections tirent sur simulation et sont documentées niveau « handover N1 »</li>
+      <li>Tu récites les pièges lookback/latence/grouping et leurs parades</li>
+      <li>Tu argumentes le choix analytics rule vs custom detection sur 3 cas concrets</li>
+      <li>Jalon mi-parcours : 10 détections en prod (lab ou pro), versionnées quelque part</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 6 ========== -->
+<section id="ch6">
+  <div class="ch-tag"><b>Chapitre 06</b><span class="wk">Semaines 11–12</span></div>
+  <h2>Threat intelligence, UEBA & hunting méthodologique</h2>
+  <a class="chaplink" href="chapitres/ch06-threat-intel-hunting.html">Ouvrir le cours détaillé — IoC actifs, UEBA, deux chasses et corrigés</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Opérationnaliser la CTI dans Sentinel (ingestion, matching, cycle de vie des IoC)</li>
+      <li>Exploiter l'UEBA sans lui faire dire ce qu'elle ne dit pas</li>
+      <li>Conduire une chasse structurée, documentée, convertible en détection</li>
+    </ul>
+  </div>
+
+  <h3>La CTI dans Sentinel, version 2026</h3>
+  <ul class="feat">
+    <li><strong>Ingestion</strong>&nbsp;— flux STIX/TAXII, API d'upload, connecteurs d'éditeurs, et Microsoft Defender Threat Intelligence (<span class="ac">MDTI</span>) pour le renseignement Microsoft. Les indicateurs vivent désormais dans les tables <code>ThreatIntelIndicators</code> / <code>ThreatIntelObjects</code> (modèle STIX 2.1 — objets riches : acteurs, relations — remplaçant l'ancienne <code>ThreatIntelligenceIndicator</code>).</li>
+    <li><strong>Matching</strong>&nbsp;— les règles « TI map » croisent automatiquement IoC ↔ logs (IP dans SigninLogs, domaines dans les DNS…). À toi de choisir <em>quelles</em> familles d'IoC matcher sur <em>quelles</em> tables : tout croiser partout = bruit.</li>
+    <li><strong>Cycle de vie</strong>&nbsp;— un IoC a une durée de vie (une IP C2 se recycle en semaines) : expiration, confiance, source. Un feed jamais purgé devient un générateur de FP.</li>
+    <li><strong>Dans le portail unifié</strong>&nbsp;— la TI est requêtable en advanced hunting et enrichit les pages d'entités (réputation, rapports d'acteurs, sandbox) : ton pivot d'investigation gratuit.</li>
+    </ul>
+
+  <h3>UEBA : puissant, à condition de savoir ce que c'est</h3>
+  <p>L'UEBA de Sentinel construit des <strong>profils de référence</strong> par utilisateur/entité (pairs, habitudes, premiers usages) et publie des enrichissements dans <code>BehaviorAnalytics</code> (avec <code>InvestigationPriority</code>) et <code>IdentityInfo</code> (le référentiel identité croisable en KQL — service ↔ RH ↔ privilèges). Trois usages sains&nbsp;: <strong>prioriser</strong> le triage (score élevé d'abord), <strong>enrichir</strong> tes règles (croiser un signal faible avec un score comportemental), <strong>pivoter</strong> en investigation (« qu'a fait cette identité d'inhabituel ce mois-ci ? »). Un usage malsain&nbsp;: alerter sur le seul score — l'anomalie statistique n'est pas une malveillance.</p>
+
+  <h3>Le hunting comme discipline</h3>
+  <ul class="feat">
+    <li><strong>Hypothèse d'abord</strong>&nbsp;— « si un attaquant faisait X chez nous, ça laisserait la trace Y dans la table Z ». Sans hypothèse, tu fais du tourisme dans les logs.</li>
+    <li><strong>Le workflow outillé</strong>&nbsp;— les <em>hunts</em> du portail (regrouper requêtes, bookmarks et résultats par hypothèse MITRE), les <strong>bookmarks</strong> (figer une trouvaille, la promouvoir en incident), le <strong>hunting graph</strong> pour matérialiser les relations.</li>
+    <li><strong>Le retro-hunting sur data lake</strong>&nbsp;— interroger l'historique avec le parcours disponible : advanced hunting et Fabric pour les nouveaux onboardings de septembre 2026 ; parcours historique KQL jobs pour les environnements concernés. Mesurer couverture et coût.</li>
+    <li><strong>Notebooks</strong>&nbsp;— Jupyter sur le lake pour les analyses lourdes (clustering, graphes, ML ad hoc) — ton terrain naturel vu ton profil data.</li>
+    <li><strong>La sortie d'une chasse</strong> est toujours l'un de ces trois livrables : un incident (trouvé), une détection nouvelle (industrialisé), ou un rapport « rien trouvé, voici la couverture testée » (qui a aussi de la valeur).</li>
+  </ul>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 11–12</span>
+    <ol>
+      <li>Branche un feed TI ouvert + charge 20 IoC à la main via l'API ; crée la règle de matching sur SigninLogs et déclenche-la avec une « visite » simulée.</li>
+      <li>Active l'UEBA, laisse-la apprendre 1 semaine, puis écris une requête croisant <code>BehaviorAnalytics</code> et un signal brut.</li>
+      <li>Conduis 2 chasses complètes (ex : abus d'OAuth ; exfiltration par outil de sync cloud) : hypothèse → requêtes → bookmarks → livrable. Une des deux doit finir en détection versionnée.</li>
+      <li>Lance un KQL job rétroactif sur le lake avec un IoC « ancien » et documente le coût/le temps.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu expliques le cycle de vie d'un IoC et configures son expiration</li>
+      <li>Tu cites les 3 bons usages de l'UEBA et le mauvais</li>
+      <li>Tes 2 chasses sont documentées au format hypothèse/méthode/résultat/livrable</li>
+      <li>Tu as exécuté un retro-hunt sur le data lake de bout en bout</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== MOIS 4 ==================== -->
+<div class="month">
+  <span class="mn">M4</span><span class="mt">Defender XDR expert — les capteurs et leur logique interne</span>
+  <span class="ms">Semaines 13–16 · Objectif SC-200 en fin de mois : à ce stade tu couvres SIEM + XDR de bout en bout</span>
+</div>
+
+<!-- ========== CH 7 ========== -->
+<section id="ch7">
+  <div class="ch-tag"><b>Chapitre 07</b><span class="wk">Semaines 13–14</span><span>Le module le plus profond</span></div>
+  <h2>Defender for Endpoint : de l'EDR à l'expertise</h2>
+  <a class="chaplink" href="chapitres/ch07-defender-endpoint.html">Ouvrir le cours détaillé — clés de processus, pivots et réponse vérifiée</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Comprendre l'architecture du capteur et le pipeline de détection</li>
+      <li>Manier les tables endpoint en advanced hunting comme un analyste forensic</li>
+      <li>Exploiter ASR, network protection, tamper protection, isolation, live response</li>
+      <li>Lire les investigations automatiques (AIR) et l'attack disruption</li>
+    </ul>
+  </div>
+
+  <h3>Anatomie du capteur</h3>
+  <p><span class="ac">MDE</span> combine le capteur intégré à Windows (10/11, Server) et des capteurs pour macOS/Linux/mobile. Il remonte deux natures de signal&nbsp;: la <strong>télémétrie brute</strong> (processus, réseau, fichiers, registre, chargements de DLL…) qui alimente l'advanced hunting, et les <strong>détections</strong> (EDR comportemental + antivirus Defender + renseignement cloud). Le tout est enrichi côté cloud, corrélé par le XDR, et exposé dans le portail unifié. Deux plans&nbsp;: P1 (protection, réduction de surface) et <strong>P2</strong> (EDR complet, advanced hunting, AIR, threat & vulnerability management) — c'est P2 qui débloque le XDR.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 210" role="img" aria-label="Pipeline Defender for Endpoint : capteur, télémétrie et détections vers le cloud, corrélation, AIR et attack disruption">
+      <defs><marker id="a7b" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--sky)"/></marker></defs>
+      <rect class="d-src" x="16" y="66" width="120" height="80" rx="9"/>
+      <text class="d-lab" x="76" y="94" text-anchor="middle" font-size="12">Capteur</text>
+      <text class="d-sub" x="76" y="112" text-anchor="middle">Win/Mac/Linux</text>
+      <text class="d-sub" x="76" y="127" text-anchor="middle">tamper protection</text>
+      <rect class="d-defender" x="176" y="44" width="150" height="52" rx="9"/>
+      <text class="d-lab" x="251" y="66" text-anchor="middle" font-size="12">Télémétrie brute</text><text class="d-sub" x="251" y="82" text-anchor="middle">→ Device* (hunting)</text>
+      <rect class="d-hi" x="176" y="112" width="150" height="52" rx="9"/>
+      <text class="d-lab" x="251" y="134" text-anchor="middle" font-size="12">Détections EDR+AV</text><text class="d-sub" x="251" y="150" text-anchor="middle">comportement · cloud</text>
+      <rect class="d-box" x="366" y="78" width="150" height="56" rx="9"/>
+      <text class="d-lab" x="441" y="100" text-anchor="middle" font-size="12">Corrélation XDR</text><text class="d-sub" x="441" y="116" text-anchor="middle">alertes → incident</text>
+      <rect class="d-defender" x="556" y="44" width="208" height="52" rx="9"/>
+      <text class="d-lab" x="660" y="66" text-anchor="middle" font-size="12">AIR — investigation auto</text><text class="d-sub" x="660" y="82" text-anchor="middle">verdicts + remédiation</text>
+      <rect class="d-hi" x="556" y="112" width="208" height="52" rx="9"/>
+      <text class="d-lab" x="660" y="134" text-anchor="middle" font-size="12">Attack disruption</text><text class="d-sub" x="660" y="150" text-anchor="middle">isole l'appareil en vol</text>
+      <path class="d-arr-sig" d="M136,96 L176,80 " marker-end="url(#a7b)"/>
+      <path class="d-arr-sig" d="M136,116 L176,132" marker-end="url(#a7b)"/>
+      <path class="d-arr-sig" d="M326,70 L346,70 L346,100 L366,100" marker-end="url(#a7b)"/>
+      <path class="d-arr-sig" d="M326,138 L346,138 L346,110 L366,110" marker-end="url(#a7b)"/>
+      <path class="d-arr-sig" d="M516,100 L536,100 L536,70 L556,70" marker-end="url(#a7b)"/>
+      <path class="d-arr-sig" d="M516,110 L536,110 L536,138 L556,138" marker-end="url(#a7b)"/>
+    </svg>
+    <figcaption><b>Deux flux, une corrélation.</b> La télémétrie nourrit ta chasse&nbsp;; les détections nourrissent l'incident&nbsp;; AIR et attack disruption ferment la boucle automatiquement.</figcaption>
+  </figure>
+
+  <h3>Les tables endpoint : ta scène de crime</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Table</th><th>Contenu</th><th>Usage forensic typique</th></tr></thead>
+      <tbody>
+        <tr><td><code>DeviceProcessEvents</code></td><td>Créations de processus + lignes de commande + arbre parent</td><td>Reconstituer une chaîne d'exécution</td></tr>
+        <tr><td><code>DeviceNetworkEvents</code></td><td>Connexions réseau par processus</td><td>Trouver le C2, le processus qui « parle » dehors</td></tr>
+        <tr><td><code>DeviceFileEvents</code></td><td>Créations/modifications/suppressions de fichiers</td><td>Dépôt de payload, staging d'exfiltration</td></tr>
+        <tr><td><code>DeviceRegistryEvents</code></td><td>Modifications de registre</td><td>Persistance (Run keys), désactivation de défenses</td></tr>
+        <tr><td><code>DeviceLogonEvents</code></td><td>Ouvertures de session locales</td><td>Mouvement latéral, comptes utilisés</td></tr>
+        <tr><td><code>DeviceImageLoadEvents</code></td><td>Chargements de DLL/modules</td><td>Side-loading, injection</td></tr>
+        <tr><td><code>DeviceEvents</code></td><td>Fourre-tout des événements de sécurité MDE</td><td>ASR déclenchés, actions Defender, etc.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="lab">Réflexe forensic</span>
+    À partir d'un <code>DeviceId</code> et d'un <code>Timestamp</code>, tu dois savoir reconstruire l'arbre de processus (<code>InitiatingProcessId</code> / <code>InitiatingProcessFileName</code> remontent la filiation) et pivoter vers le réseau et les fichiers sur la même fenêtre. C'est l'exercice de base d'une investigation endpoint — à automatiser en fonction KQL.
+  </div>
+
+  <h3>Les capacités défensives et de réponse à maîtriser</h3>
+  <ul class="feat">
+    <li><strong>ASR rules</strong> (Attack Surface Reduction)&nbsp;— règles qui bloquent des comportements d'abus courants (Office qui engendre un enfant, exécution depuis USB…). À déployer d'abord en <em>audit</em>, puis <em>block</em> après analyse — les événements audit sont une mine de hunting.</li>
+    <li><strong>Network protection / Web content filtering</strong>&nbsp;— blocage réseau au niveau du poste (C2, catégories).</li>
+    <li><strong>Tamper protection</strong>&nbsp;— empêche la désactivation de Defender par l'attaquant. Sa désactivation est en soi une alerte.</li>
+    <li><strong>Actions de réponse</strong>&nbsp;— isolation, package d'investigation, quarantaine et restrictions selon le système et la licence. <strong>Live Response</strong> fournit des commandes et scripts pris en charge, pas un shell distant arbitraire. Vérifie toujours l'état final de l'action.</li>
+    <li><strong>TVM</strong> (Threat &amp; Vulnerability Management)&nbsp;— inventaire logiciel et vulnérabilités priorisées par l'exposition réelle. Rappel du socle&nbsp;: ces tables (<code>DeviceTvm*</code>) sont dans Defender mais <strong>pas ingérées dans Sentinel</strong>.</li>
+  </ul>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 13–14</span>
+    <ol>
+      <li>Onboard une VM Windows dans MDE (P2 via tenant dev E5). Active ASR en audit, tamper protection, network protection.</li>
+      <li>Joue une chaîne d'attaque simple (Atomic Red Team : exécution → persistance registre → connexion sortante). Reconstitue-la <em>uniquement</em> en advanced hunting, puis observe l'incident généré par le XDR.</li>
+      <li>Isole la machine, ouvre une Live Response, récupère un fichier, lève l'isolation — chronométré.</li>
+      <li>Écris une fonction KQL <code>ArbreProcessus(DeviceId, temps)</code> qui reconstruit la filiation.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu reconstruis une chaîne d'attaque endpoint en hunting sans aide, filiation comprise</li>
+      <li>Tu connais les actions de réponse MDE et quand utiliser chacune</li>
+      <li>Tu expliques ASR audit→block et exploites les événements audit en chasse</li>
+      <li>Tu sais ce que AIR décide seul et ce qui requiert ta validation</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 8 ========== -->
+<section id="ch8">
+  <div class="ch-tag"><b>Chapitre 08</b><span class="wk">Semaines 15–16</span><span>SC-200 en ligne de mire</span></div>
+  <h2>Identité, mail & SaaS : MDI, MDO, MDCA</h2>
+  <a class="chaplink" href="chapitres/ch08-identite-mail-saas.html">Ouvrir le cours détaillé — MDI, campagne mail, BEC et corrélation</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Détecter les attaques AD on-prem avec Defender for Identity</li>
+      <li>Investiguer le phishing et le BEC avec Defender for Office 365</li>
+      <li>Gouverner le SaaS et l'usage d'IA générative avec Defender for Cloud Apps</li>
+      <li>Voir comment les trois se corrèlent en une seule histoire d'attaque</li>
+    </ul>
+  </div>
+
+  <h3>Defender for Identity (MDI) — le radar de l'AD on-prem</h3>
+  <p><span class="ac">MDI</span> observe les systèmes d'identité hybride pris en charge pour détecter reconnaissance, abus d'authentification et mouvements latéraux. Vérifie système, version de capteur et audits requis. Le capteur v3 documenté utilise <strong>LocalSystem</strong>, pas un gMSA ; les procédures v2 et v3 diffèrent. Tables utiles : <code>IdentityLogonEvents</code>, <code>IdentityQueryEvents</code> et <code>IdentityDirectoryEvents</code>. Les honeytokens et simulations nécessitent une recette adaptée à la détection visée.</p>
+  <div class="note warn">
+    <span class="lab">Le pont on-prem → cloud</span>
+    MDI est ce qui te permet de voir venir une compromission <em>avant</em> qu'elle n'atteigne Entra via le serveur de sync. Croise <code>IdentityLogonEvents</code> (on-prem) et <code>SigninLogs</code> (cloud) pour suivre un compte à travers la frontière hybride — c'est un pattern de corrélation que peu d'analystes maîtrisent, et un vrai marqueur d'expertise.
+  </div>
+
+  <h3>Defender for Office 365 (MDO) — mail & collaboration</h3>
+  <ul class="feat">
+    <li><strong>Protections</strong>&nbsp;: Safe Attachments (détonation en sandbox), Safe Links (réécriture + scan au clic, y compris dans Teams), anti-phishing (usurpation, impersonation).</li>
+    <li><strong>Investigation</strong>&nbsp;: <em>Threat Explorer</em> (recherche/chasse sur tout le flux mail), et les tables <code>EmailEvents</code>, <code>EmailUrlInfo</code>, <code>EmailAttachmentInfo</code>, <code>UrlClickEvents</code>.</li>
+    <li><strong>Actions</strong>&nbsp;: purge automatique de mails post-livraison (<span class="ac">ZAP</span>), remédiation manuelle (soft/hard delete) sur une campagne entière.</li>
+    <li><strong>Scénario clé — le BEC</strong> (Business Email Compromise)&nbsp;: reconnaître la chaîne compte compromis → règle de boîte malveillante (masquer les réponses) → envois frauduleux. Croise <code>CloudAppEvents</code> (création de règle Inbox) et <code>EmailEvents</code>.</li>
+  </ul>
+
+  <h3>Defender for Cloud Apps (MDCA) — le CASB, et l'angle IA</h3>
+  <ul class="feat">
+    <li><strong>Découverte du Shadow IT</strong>&nbsp;— quelles apps/quels services IA les utilisateurs emploient (via logs firewall/proxy ou MDE).</li>
+    <li><strong>App connectors (API)</strong>&nbsp;— visibilité fine et actions sur les SaaS majeurs (M365, Google, Salesforce, AWS…) : fichiers, partages, sessions.</li>
+    <li><strong>Session control</strong> (reverse proxy)&nbsp;— appliquer des règles en temps réel dans la session (bloquer un téléchargement sensible, imposer une lecture seule) — pont avec Conditional Access.</li>
+    <li><strong>App governance</strong>&nbsp;— gouvernance des applications OAuth connectées à M365 : c'est <em>ici</em> qu'on attrape le consent phishing du chapitre 02. Et de plus en plus, la gouvernance des <strong>apps et agents d'IA générative</strong> — sujet montant, à ton intersection SOC/IA.</li>
+    <li>Table centrale&nbsp;: <code>CloudAppEvents</code> — l'activité SaaS unifiée (dont l'Unified Audit Log M365).</li>
+  </ul>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 180" role="img" aria-label="Corrélation cross-domaine d'une attaque : mail piégé, identité compromise, endpoint exécuté, exfiltration SaaS, réunis en un incident">
+      <defs><marker id="a8b" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--defender)"/></marker></defs>
+      <rect class="d-defender" x="16" y="30" width="150" height="46" rx="8"/><text class="d-lab" x="91" y="50" text-anchor="middle" font-size="11.5">1 · MDO</text><text class="d-sub" x="91" y="65" text-anchor="middle">mail de phishing</text>
+      <rect class="d-defender" x="200" y="30" width="150" height="46" rx="8"/><text class="d-lab" x="275" y="50" text-anchor="middle" font-size="11.5">2 · Entra/MDI</text><text class="d-sub" x="275" y="65" text-anchor="middle">identité compromise</text>
+      <rect class="d-defender" x="384" y="30" width="150" height="46" rx="8"/><text class="d-lab" x="459" y="50" text-anchor="middle" font-size="11.5">3 · MDE</text><text class="d-sub" x="459" y="65" text-anchor="middle">exécution endpoint</text>
+      <rect class="d-defender" x="568" y="30" width="150" height="46" rx="8"/><text class="d-lab" x="643" y="50" text-anchor="middle" font-size="11.5">4 · MDCA</text><text class="d-sub" x="643" y="65" text-anchor="middle">exfiltration SaaS</text>
+      <path class="d-arr" style="stroke:var(--defender)" d="M166,53 L200,53" marker-end="url(#a8b)"/>
+      <path class="d-arr" style="stroke:var(--defender)" d="M350,53 L384,53" marker-end="url(#a8b)"/>
+      <path class="d-arr" style="stroke:var(--defender)" d="M534,53 L568,53" marker-end="url(#a8b)"/>
+      <rect class="d-hi" x="250" y="118" width="280" height="44" rx="9"/>
+      <text class="d-lab" x="390" y="140" text-anchor="middle">Un seul incident corrélé</text><text class="d-sub" x="390" y="155" text-anchor="middle">l'histoire d'attaque complète, pas 4 alertes isolées</text>
+      <path class="d-arr" style="stroke:var(--defender);stroke-dasharray:4 3" d="M91,76 L91,140 L250,140" marker-end="url(#a8b)"/>
+      <path class="d-arr" style="stroke:var(--defender);stroke-dasharray:4 3" d="M643,76 L643,140 L530,140" marker-end="url(#a8b)"/>
+    </svg>
+    <figcaption><b>Pourquoi le XDR vaut plus que la somme des modules.</b> La même intrusion traverse quatre domaines&nbsp;; la corrélation la raconte comme une seule histoire.</figcaption>
+  </figure>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 15–16</span>
+    <ol>
+      <li>MDI : monte un petit AD sur une VM, installe le capteur, pose un honeytoken, joue une reconnaissance/Kerberoasting (outil de test) et retrouve l'alerte + la trace hunting.</li>
+      <li>MDO : envoie-toi un mail avec lien/pièce jointe de test (EICAR, URL benigne), suis-le dans Threat Explorer et les tables Email*, effectue une purge.</li>
+      <li>MDCA : connecte ton M365 de dev, crée une règle Inbox malveillante et détecte-la via CloudAppEvents ; explore app governance sur une app OAuth de test.</li>
+      <li>Corrélation : provoque un mini-scénario multi-domaine, examine les regroupements réellement obtenus et rédige une timeline sourcée. Un incident unique n'est pas garanti.</li>
+      <li>Révision SC-200 : blueprint officiel, examens blancs, comblage des trous.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu nommes les grandes techniques AD et la détection MDI associée</li>
+      <li>Tu investigues une campagne de phishing de bout en bout dans MDO</li>
+      <li>Tu relies consent phishing (ch.02) et app governance (MDCA)</li>
+      <li>Tu racontes une attaque cross-domaine à partir d'un incident corrélé</li>
+      <li><strong>Jalon majeur : SC-200 passé.</strong></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== MOIS 5 ==================== -->
+<div class="month">
+  <span class="mn">M5</span><span class="mt">Cloud & DevSecOps — la moitié qui te distingue vraiment</span>
+  <span class="ms">Semaines 17–20 · Le cœur de ta double casquette : sécuriser le cloud ET la chaîne qui le produit</span>
+</div>
+
+<!-- ========== CH 9 ========== -->
+<section id="ch9">
+  <div class="ch-tag"><b>Chapitre 09</b><span class="wk">Semaines 17–18</span><span>CNAPP · posture · NIS2</span></div>
+  <h2>Defender for Cloud : posture, charges de travail & exposition</h2>
+  <a class="chaplink" href="chapitres/ch09-defender-cloud.html">Ouvrir le cours détaillé — chemins d'attaque, correction et preuves</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Situer Defender for Cloud comme CNAPP (CSPM + CWPP) et le brancher sur Sentinel</li>
+      <li>Piloter le secure score, les standards de conformité et les attack paths</li>
+      <li>Comprendre chaque plan de protection de charge (serveurs, conteneurs, stockage, bases, IA)</li>
+      <li>Relier tout ça à une posture NIS2 démontrable</li>
+    </ul>
+  </div>
+
+  <h3>Le vocabulaire CNAPP, sans jargon inutile</h3>
+  <p>Defender for Cloud est la plateforme <span class="ac">CNAPP</span> de Microsoft&nbsp;— deux moitiés à ne pas confondre&nbsp;:</p>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Moitié</th><th>Question à laquelle elle répond</th><th>Concrètement</th></tr></thead>
+      <tbody>
+        <tr><td><strong>CSPM</strong> — posture</td><td>« Ma configuration est-elle sûre&nbsp;? »</td><td>Secure score, recommandations, conformité réglementaire, attack paths, security explorer, agentless scanning</td></tr>
+        <tr><td><strong>CWPP</strong> — protection des charges</td><td>« Mes charges sont-elles attaquées <em>maintenant</em>&nbsp;? »</td><td>Plans Defender par type de ressource (serveurs, conteneurs, stockage, SQL…) qui génèrent des <em>alertes</em> temps réel</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Le CSPM gratuit (secure score + recommandations de base) est actif sur tout abonnement&nbsp;; le <strong>Defender CSPM</strong> payant débloque les fonctions à forte valeur&nbsp;: attack paths, security explorer (le graphe requêtable), agentless scanning, code-to-cloud (chapitre 10). Retiens cette dépendance&nbsp;: <em>les fonctionnalités DevSecOps avancées du chapitre suivant exigent Defender CSPM</em>.</p>
+
+  <h3>CSPM en pratique : de la liste de findings au chemin d'attaque</h3>
+  <ul class="feat">
+    <li><strong>Secure score</strong>&nbsp;— un pourcentage agrégé, décliné en recommandations priorisées. Utile comme tendance et comme langage commun avec les équipes cloud&nbsp;; dangereux si on le prend pour une note à maximiser aveuglément.</li>
+    <li><strong>Standards de conformité</strong>&nbsp;— tu actives les référentiels pertinents (CIS, ISO 27001, et les cadres utilisés pour ta démonstration NIS2) et Defender évalue en continu&nbsp;; export du tableau de bord pour l'audit.</li>
+    <li><strong>Attack paths</strong>&nbsp;— la vraie valeur d'expert&nbsp;: Defender chaîne les faiblesses en <em>chemins</em> exploitables (« VM exposée à Internet → vulnérable → identité managée avec droits élevés → accès au stockage sensible »). Tu passes du «&nbsp;j'ai 400 findings&nbsp;» au «&nbsp;voici les 5 chemins qui mènent vraiment à mes joyaux&nbsp;».</li>
+    <li><strong>Security explorer</strong>&nbsp;— le graphe cloud interrogeable pour tes propres questions de posture (« quelles ressources exposées ont un accès à ce Key Vault&nbsp;? »).</li>
+    <li><strong>Exposure Management</strong>&nbsp;— la couche au-dessus, qui unifie la surface d'exposition à travers Defender (endpoint, cloud, identité) en une vue de chemins d'attaque à l'échelle de l'organisation. La direction stratégique de Microsoft&nbsp;: raisonner exposition, pas juste alertes.</li>
+  </ul>
+
+  <h3>CWPP : les plans de protection à connaître</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Plan</th><th>Protège</th><th>Exemples d'alertes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Defender for Servers</strong></td><td>VMs (Azure/AWS/GCP/on-prem via Arc) — intègre MDE</td><td>Comportement malveillant, exécution suspecte, MDE sur serveur</td></tr>
+        <tr><td><strong>Defender for Containers</strong></td><td>Kubernetes/AKS, images, registres</td><td>Conteneur privilégié, image vulnérable déployée, activité anormale du cluster</td></tr>
+        <tr><td><strong>Defender for Storage</strong></td><td>Comptes de stockage/blobs</td><td>Upload de malware (scan intégré), accès depuis IP anormale, exfiltration</td></tr>
+        <tr><td><strong>Defender for SQL / bases</strong></td><td>Bases managées et sur VM</td><td>Injection SQL, accès inhabituel, brute force</td></tr>
+        <tr><td><strong>Defender for Key Vault</strong></td><td>Coffres de secrets</td><td>Accès anormal aux secrets — signal fort de compromission (rappel ch.01)</td></tr>
+        <tr><td><strong>Defender for APIs / AI</strong></td><td>API Management ; charges d'IA générative</td><td>Abus d'API ; menaces sur les workloads IA (prompt injection detection…)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Le branchement sur ton SOC</h3>
+  <p>Les alertes CWPP de Defender for Cloud remontent <strong>nativement dans le portail unifié et dans Sentinel</strong> (connecteur Tenant-based / Defender for Cloud) — elles deviennent des incidents corrélables avec le reste. Ton rôle&nbsp;: trier ces alertes cloud comme le reste, mais aussi <strong>consommer la posture</strong> (les findings CSPM et attack paths) pour prioriser le durcissement. Un analyste expert ne se contente pas de réagir aux alertes cloud&nbsp;: il utilise les attack paths pour <em>réduire la surface avant l'incident</em>.</p>
+
+  <div class="note">
+    <span class="lab">Angle NIS2 — ton sujet</span>
+    Defender for Cloud est un producteur de preuves NIS2&nbsp;: gestion des vulnérabilités (TVM/agentless), continuité de la surveillance, mesure du durcissement (secure score dans le temps), conformité aux référentiels, et traçabilité. Couplé aux transformations DCR pour la journalisation et à la rétention data lake (jusqu'à 12 ans) pour la conservation des preuves, tu tiens l'ossature technique d'une démonstration de conformité. Sache <em>où</em> chaque exigence se matérialise en contrôle Microsoft — c'est exactement le pont entre ton travail NIS2 et la plateforme.
+  </div>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 17–18</span>
+    <ol>
+      <li>Active Defender CSPM (essai) sur ton abonnement. Déploie volontairement des ressources mal configurées (stockage public, VM avec port ouvert, identité managée sur-permissionnée).</li>
+      <li>Laisse Defender évaluer, puis explore le(s) <strong>attack path(s)</strong> générés et suis la remédiation recommandée jusqu'à faire disparaître un chemin.</li>
+      <li>Active un standard de conformité et exporte le tableau de bord (ton artefact « preuve NIS2 »).</li>
+      <li>Active Defender for Storage, uploade un fichier de test EICAR, vérifie l'alerte — et retrouve-la dans Sentinel/portail unifié.</li>
+      <li>Écris une requête security explorer répondant à une question de posture que tu te poses vraiment.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu distingues CSPM et CWPP et sais ce que débloque Defender CSPM payant</li>
+      <li>Tu expliques un attack path et t'en sers pour prioriser un durcissement</li>
+      <li>Tu tries une alerte CWPP dans le portail unifié comme n'importe quel incident</li>
+      <li>Tu cartographies 3 exigences NIS2 vers leur contrôle Defender for Cloud</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 10 ========== -->
+<section id="ch10">
+  <div class="ch-tag"><b>Chapitre 10</b><span class="wk">Semaines 19–20</span><span class="wk">Le chapitre signature</span><span>SOC × DevSecOps</span></div>
+  <h2>DevSecOps & detection-as-code : sécuriser la chaîne, coder tes détections</h2>
+  <a class="chaplink" href="chapitres/ch10-devsecops-detection-as-code.html">Ouvrir le cours détaillé — template Bicep complet, CI/CD OIDC et rollback</a>
+  <p>Ce chapitre est le point de fusion de tes deux métiers. Deux mouvements complémentaires&nbsp;: <strong>shift-left</strong> (sécuriser le code et la chaîne <em>avant</em> la prod) et <strong>shield-right</strong> (la détection en prod)&nbsp;— et surtout l'idée qui relie tout&nbsp;: <em>tes détections de sécurité sont elles-mêmes du code, gérées avec la même rigueur que le reste</em>.</p>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Sécuriser une chaîne CI/CD : secrets, dépendances, code, IaC, conteneurs</li>
+      <li>Exploiter GitHub Advanced Security et Defender for Cloud DevOps security côté SOC</li>
+      <li>Mettre en place le detection-as-code Sentinel (repos + CI/CD + Bicep)</li>
+      <li>Monitorer la chaîne DevOps elle-même comme une source de sécurité</li>
+    </ul>
+  </div>
+
+  <h3>Sécuriser la chaîne : les cinq surfaces</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Surface</th><th>Risque</th><th>Outil Microsoft/GitHub</th><th>Où ça remonte</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Secrets</strong> dans le code</td><td>Clés/tokens commités</td><td>Secret scanning + push protection (GHAS)</td><td>GitHub · Defender for Cloud DevOps</td></tr>
+        <tr><td><strong>Dépendances</strong></td><td>Composants vulnérables (supply chain)</td><td>Dependabot / dependency scanning</td><td>GitHub · findings DevOps</td></tr>
+        <tr><td><strong>Code</strong> (SAST)</td><td>Vulnérabilités applicatives</td><td>CodeQL (GHAS)</td><td>GitHub · Defender for Cloud</td></tr>
+        <tr><td><strong>IaC</strong></td><td>Bicep/Terraform mal configurés</td><td>MSDO (Microsoft Security DevOps) + template analyzer</td><td>PR annotations · findings DevOps</td></tr>
+        <tr><td><strong>Conteneurs</strong></td><td>Images vulnérables</td><td>Scan de registre (Defender for Containers)</td><td>Defender for Cloud</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Defender for Cloud DevOps security</strong> unifie la vue sur Azure DevOps, GitHub <em>et</em> GitLab&nbsp;: un connecteur relie tes orgs, et les findings (code, secrets, dépendances, IaC) atterrissent dans une page DevOps security unique, priorisée. Les fonctions à forte valeur — <strong>code-to-cloud contextualization</strong> (relier une image qui tourne à son dépôt d'origine), <strong>attack path</strong> incluant le code, <strong>PR annotations</strong> — nécessitent Defender CSPM (le lien avec le chapitre 09). L'exécution des scans dans la pipeline passe par l'extension <strong>MSDO</strong> ou l'agentless scanning&nbsp;; CodeQL vient de GHAS.</p>
+
+  <div class="note">
+    <span class="lab">Key Vault & identités : l'hygiène de base de la chaîne</span>
+    Deux réflexes DevSecOps non négociables&nbsp;: <strong>zéro secret en dur</strong> (tout dans Key Vault, injecté au runtime&nbsp;; les pipelines s'authentifient via <em>workload identity federation</em> / OIDC plutôt qu'avec des secrets stockés) et <strong>moindre privilège</strong> sur les identités de déploiement (managed identities/SP scopés au strict nécessaire, rappel du RBAC ch.01). La plupart des compromissions de pipeline exploitent l'un de ces deux manquements.
+  </div>
+
+  <h3>Le detection-as-code Sentinel — l'état de l'art 2026</h3>
+  <p>C'est ici que ton chapitre 05 rencontre ta pratique DevOps. Les <strong>Sentinel Repositories</strong> permettent de gérer <em>tout</em> le contenu — analytics rules, playbooks, parsers, workbooks, et depuis mi-2026 les <strong>custom detections</strong> — comme du code&nbsp;:</p>
+  <ul class="feat">
+    <li><strong>Le principe</strong>&nbsp;: le dépôt devient la source de vérité souhaitée. Les smart deployments ne redéploient par défaut que les fichiers modifiés ; une dérive portail peut donc subsister jusqu'au redéploiement de la règle. Supprimer un fichier du dépôt ne supprime pas automatiquement la ressource Sentinel.</li>
+    <li><strong>Deux chemins de déploiement</strong>&nbsp;: la connexion Repositories native, ou le chemin autonome via l'<strong>extension Bicep Microsoft Security</strong> — n'importe quel runner capable de lancer Azure CLI peut livrer les règles (GitHub Actions, ADO Pipelines, runner maison).</li>
+    <li><strong>Le workflow complet</strong>&nbsp;: une détection naît en branche, passe une validation automatique (lint KQL, schéma), est revue en PR par un pair, fusionne, se déploie par la pipeline. Exactement ton cycle de vie du chapitre 05, mais outillé et traçable.</li>
+    <li><strong>Pour un MSSP</strong>&nbsp;: un repo central de règles «&nbsp;maison&nbsp;» déployé vers N workspaces clients — ta propriété intellectuelle versionnée, testée une fois, distribuée partout. C'est l'industrialisation dont parlait le chapitre 03.</li>
+  </ul>
+
+  <div class="note warn">
+    <span class="lab">Le piège subtil du DaC sur custom detections</span>
+    Quand Microsoft renomme des tables/colonnes du schéma advanced hunting, la migration automatique s'applique aux requêtes <em>sauvegardées dans Defender</em> — mais <strong>pas</strong> à celles vivant dans ton repo Git (hors Defender). Une règle stockée en code peut donc casser silencieusement à un changement de schéma. La parade est justement du ressort DevSecOps&nbsp;: tests automatiques dans la CI qui valident que chaque requête compile encore contre le schéma courant. Ton réflexe d'ingénieur protège tes détections.
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 340" role="img" aria-label="Pipeline DevSecOps de bout en bout : du code au cloud jusqu'au SOC, avec la boucle detection-as-code qui reboucle sur la chaîne">
+      <defs><marker id="a10" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--devops)"/></marker>
+      <marker id="a10s" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="var(--sky)"/></marker></defs>
+
+      <text class="d-cap" x="16" y="24" fill="var(--devops)">Shift-left — sécuriser la fabrique</text>
+      <!-- code -->
+      <rect class="d-devops" x="16" y="36" width="150" height="72" rx="10"/>
+      <text class="d-lab" x="91" y="58" text-anchor="middle" font-size="12">Code</text>
+      <text class="d-sub" x="91" y="75" text-anchor="middle">GHAS : CodeQL,</text>
+      <text class="d-sub" x="91" y="89" text-anchor="middle">secret scan, deps</text>
+      <text class="d-sub" x="91" y="103" text-anchor="middle">push protection</text>
+      <!-- pipeline -->
+      <rect class="d-devops" x="196" y="36" width="150" height="72" rx="10"/>
+      <text class="d-lab" x="271" y="58" text-anchor="middle" font-size="12">Pipeline CI/CD</text>
+      <text class="d-sub" x="271" y="75" text-anchor="middle">MSDO · IaC scan</text>
+      <text class="d-sub" x="271" y="89" text-anchor="middle">OIDC, pas de secret</text>
+      <text class="d-sub" x="271" y="103" text-anchor="middle">Key Vault au runtime</text>
+      <!-- cloud -->
+      <rect class="d-azure" x="376" y="36" width="150" height="72" rx="10"/>
+      <text class="d-lab" x="451" y="58" text-anchor="middle" font-size="12">Cloud (prod)</text>
+      <text class="d-sub" x="451" y="75" text-anchor="middle">charges déployées</text>
+      <text class="d-sub" x="451" y="89" text-anchor="middle">Defender for Cloud</text>
+      <text class="d-sub" x="451" y="103" text-anchor="middle">CSPM + CWPP</text>
+      <!-- SOC -->
+      <rect class="d-sentinel" x="556" y="36" width="208" height="72" rx="10"/>
+      <text class="d-lab" x="660" y="58" text-anchor="middle" font-size="12">SOC — portail unifié</text>
+      <text class="d-sub" x="660" y="75" text-anchor="middle">Sentinel + Defender XDR</text>
+      <text class="d-sub" x="660" y="89" text-anchor="middle">alertes cloud + DevOps</text>
+      <text class="d-sub" x="660" y="103" text-anchor="middle">corrélées en incidents</text>
+
+      <path class="d-arr" style="stroke:var(--devops)" d="M166,72 L196,72" marker-end="url(#a10)"/>
+      <path class="d-arr" style="stroke:var(--devops)" d="M346,72 L376,72" marker-end="url(#a10)"/>
+      <path class="d-arr" style="stroke:var(--devops)" d="M526,72 L556,72" marker-end="url(#a10)"/>
+      <text class="d-cap" x="700" y="24" fill="var(--sky)" text-anchor="end">Shield-right — détecter en prod</text>
+
+      <!-- code-to-cloud context -->
+      <path class="d-arr" style="stroke:var(--faint);stroke-dasharray:3 3" d="M91,108 Q91,150 400,150 Q451,150 451,108" marker-end="url(#a10)"/>
+      <text class="d-sub" x="270" y="145" fill="var(--faint)">code-to-cloud : relier l'image qui tourne à son dépôt d'origine (Defender CSPM)</text>
+
+      <!-- Detection-as-code loop -->
+      <rect class="d-defender" x="196" y="196" width="380" height="70" rx="11"/>
+      <text class="d-lab" x="386" y="220" text-anchor="middle" font-size="12.5">Detection-as-Code — le pont</text>
+      <text class="d-sub" x="386" y="238" text-anchor="middle">Repo de détections (analytics rules · custom detections · playbooks)</text>
+      <text class="d-sub" x="386" y="253" text-anchor="middle">PR → validation KQL → merge → déploiement Bicep/CI-CD</text>
+
+      <!-- loop arrows: SOC feeds detections, detections deploy to SOC -->
+      <path class="d-arr-sig" d="M660,108 L660,231 L576,231" marker-end="url(#a10s)"/>
+      <text class="d-sub" x="600" y="150" fill="var(--sky)" text-anchor="middle">signaux</text>
+      <text class="d-sub" x="600" y="164" fill="var(--sky)" text-anchor="middle">→ hypothèses</text>
+      <path class="d-arr-sig" d="M271,196 L271,120" marker-end="url(#a10s)"/>
+      <text class="d-sub" x="220" y="180" fill="var(--sky)" text-anchor="middle">mêmes outils</text>
+      <text class="d-sub" x="220" y="194" fill="var(--sky)" text-anchor="middle">CI/CD</text>
+
+      <text class="d-cap" x="386" y="298" text-anchor="middle">La même discipline d'ingénierie sécurise la chaîne ET produit les détections.</text>
+      <text class="d-cap" x="386" y="316" text-anchor="middle" fill="var(--devops)">C'est là que « analyste SOC » et « DevSecOps » deviennent un seul métier.</text>
+    </svg>
+    <figcaption><b>Le schéma qui résume ta trajectoire.</b> Code → cloud → SOC en haut (le flux de production sécurisé)&nbsp;; en bas, le detection-as-code qui reboucle&nbsp;: le SOC nourrit les hypothèses, la CI/CD déploie les détections, avec les mêmes outils que le reste de la chaîne.</figcaption>
+  </figure>
+
+  <div class="code">
+    <div class="bar"><span class="ttl">Bicep · compiler le template complet fourni avec le cours</span></div>
+<pre># Depuis le dossier cours_azure : aucune ressource déployée par cette commande.
+az bicep build --file labs/detection-as-code/main.bicep --stdout
+# Le chapitre détaillé explique ensuite le déploiement OIDC et sa recette.</pre>
+  </div>
+
+  <p>Le <a href="labs/detection-as-code/main.bicep">template complet</a> utilise Microsoft.SecurityInsights/alertRules avec une requête séparée et un ID stable. L'extension MicrosoftSecurity pour les custom detections reste un parcours distinct, documenté en preview avec ses prérequis.</p>
+
+  <h3>Monitorer la chaîne DevOps comme une source</h3>
+  <p>Dernier étage&nbsp;: la chaîne CI/CD est elle-même une cible et une source de télémétrie. Le connecteur <strong>GitHub (Audit logs)</strong> — arrivé mi-2026 dans Sentinel — ramène les événements de ta forge (créations de tokens, changements de droits repo, modifications de workflows, désactivation de protections) dans le SIEM. Détections utiles&nbsp;: modification d'un workflow de production hors processus, ajout d'un self-hosted runner inconnu, désactivation d'une branch protection, secret scanning alert corrélée à un accès. <em>Qui sécurise la chaîne qui sécurise le reste&nbsp;?</em> — toi.</p>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 19–20 (le lab le plus important du programme)</span>
+    <ol>
+      <li><strong>Chaîne</strong>&nbsp;: crée un repo avec une petite app + du Bicep. Active GHAS (CodeQL, secret scanning, push protection). Commit volontairement un faux secret → observe le blocage. Ajoute une dépendance vulnérable → observe le finding.</li>
+      <li><strong>Cloud</strong>&nbsp;: connecte le repo à Defender for Cloud DevOps security ; vérifie que les findings remontent, explore la contextualisation code-to-cloud si tu déploies l'app.</li>
+      <li><strong>Detection-as-code</strong>&nbsp;: crée un repo de détections, connecte-le à ton workspace Sentinel. Écris une analytics rule en YAML/Bicep, ouvre une PR, fais-la valider par un lint KQL dans une GitHub Action, merge, vérifie le déploiement automatique dans le portail. <strong>Modifie ensuite une règle à la main dans le portail et constate que le prochain sync l'écrase</strong> — la leçon « le repo est la vérité » ancrée par l'expérience.</li>
+      <li><strong>Boucle</strong>&nbsp;: branche le connecteur GitHub Audit logs et écris une détection « workflow de prod modifié hors PR ».</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu sécurises les 5 surfaces de la chaîne et sais où chaque finding remonte</li>
+      <li>Tu as un pipeline detection-as-code fonctionnel de la PR au déploiement</li>
+      <li>Tu expliques pourquoi le repo écrase le portail, et le piège du renommage de schéma</li>
+      <li>Tu monitores la forge elle-même via le connecteur d'audit</li>
+      <li>Tu articules en une phrase claire comment DevSecOps et SOC se rejoignent ici</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== MOIS 6 ==================== -->
+<div class="month">
+  <span class="mn">M6</span><span class="mt">Orchestration, IA & maîtrise — passer d'analyste à architecte de la détection</span>
+  <span class="ms">Semaines 21–24 · Automatiser à l'échelle, exploiter l'IA, gouverner les coûts, et prouver ta maîtrise par un projet complet</span>
+</div>
+
+<!-- ========== CH 11 ========== -->
+<section id="ch11">
+  <div class="ch-tag"><b>Chapitre 11</b><span class="wk">Semaines 21–22</span><span>SOAR · réponse à incident · échelle</span></div>
+  <h2>Orchestration, réponse & opérations MSSP à grande échelle</h2>
+  <a class="chaplink" href="chapitres/ch11-soar-reponse-mssp.html">Ouvrir le cours détaillé — playbooks, identités, réessais et réponse IR</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Concevoir des automation rules et des playbooks avec discernement</li>
+      <li>Distinguer automatisation SOAR et attack disruption native du XDR</li>
+      <li>Mener une réponse à incident structurée (cycle NIST) dans le portail unifié</li>
+      <li>Opérer le case management et l'automatisation à l'échelle multi-tenant</li>
+    </ul>
+  </div>
+
+  <h3>Les deux moteurs d'automatisation : ne pas les confondre</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th></th><th>Automation rules</th><th>Playbooks</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Nature</strong></td><td>Logique native Sentinel, sans code</td><td>Logic App (workflow, connecteurs, code possible)</td></tr>
+        <tr><td><strong>Rôle</strong></td><td>Orchestrer la réponse : trier, taguer, assigner, changer statut, <em>appeler</em> des playbooks, supprimer le bruit</td><td>Agir : enrichir, notifier, bloquer, ouvrir un ticket, isoler — surtout hors de Sentinel</td></tr>
+        <tr><td><strong>Déclencheur</strong></td><td>Création/màj d'incident ou d'alerte</td><td>Appelé par une règle, ou manuellement, ou par trigger propre</td></tr>
+        <tr><td><strong>Coût</strong></td><td>Inclus</td><td>Facturation Logic Apps (exécutions/connecteurs)</td></tr>
+        <tr><td><strong>Identité</strong></td><td>—</td><td><strong>Managed identity</strong> pour s'authentifier sans secret (rappel ch.01)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>La règle d'or&nbsp;: <em>l'automation rule décide, le playbook exécute</em>. On assemble les deux — une règle qui, à la création d'un incident «&nbsp;phishing&nbsp;» de sévérité haute, assigne au bon analyste, tague, et déclenche un playbook d'enrichissement (réputation d'URL, détonation, contexte utilisateur) qui repostte ses résultats en commentaire.</p>
+
+  <h3>Patterns d'automatisation qui tiennent en production</h3>
+  <ul class="feat">
+    <li><strong>Enrichissement systématique</strong>&nbsp;— à chaque incident, un playbook ajoute le contexte (géo, réputation, appartenance de l'utilisateur, historique de l'entité). L'analyste ouvre un incident déjà documenté.</li>
+    <li><strong>Triage &amp; suppression du bruit</strong>&nbsp;— fermeture automatique conditionnelle (faux positifs connus, sources de test), regroupement, ajustement de sévérité selon le contexte d'entité.</li>
+    <li><strong>Assignation intelligente</strong>&nbsp;— routage par type/tenant/heure vers la bonne file ou le bon analyste.</li>
+    <li><strong>Réponse semi-automatique</strong>&nbsp;— les actions à fort impact (isoler un poste, désactiver un compte) passent par une <em>validation humaine</em> (approbation dans Teams via le playbook) avant exécution. On automatise la préparation, pas la décision irréversible.</li>
+  </ul>
+  <div class="note warn">
+    <span class="lab">Automatisation ≠ perte de contrôle</span>
+    Le piège du SOAR est d'automatiser une action destructrice sur une détection faillible. Règle de conception&nbsp;: plus l'action est irréversible, plus le seuil de confiance et le contrôle humain doivent être élevés. Un playbook qui isole une machine doit être blindé (conditions strictes, journalisation, réversibilité, approbation). Ton rôle d'expert est autant de savoir <em>quand ne pas</em> automatiser.
+  </div>
+
+  <h3>Attack disruption : l'automatisation que Microsoft opère pour toi</h3>
+  <p>Distinct du SOAR&nbsp;: l'<span class="ac">attack disruption</span> agit au niveau du XDR, automatiquement, sur des attaques à haute confiance corrélées par Microsoft (ransomware en cours, BEC, AiTM…). Il contient l'attaque en temps réel — désactivation de compte, isolation d'appareil — <em>avant</em> ton intervention, avec un très haut niveau de confiance. Ton travail&nbsp;: comprendre ce qu'il a fait, le valider, et gérer la reprise. Ce n'est pas un playbook que tu écris&nbsp;; c'est une capacité que tu supervises.</p>
+
+  <h3>Réponse à incident structurée</h3>
+  <p>Adosse ta pratique au <strong>NIST SP 800-61 révision 3</strong> (avril 2025), intégré au CSF 2.0 : préparation via Govern/Identify/Protect, puis Detect/Respond/Recover et amélioration continue. Les tâches d'incident, preuves et timelines soutiennent cette méthode. Le chapitre détaillé distingue demande d'action, effet vérifié, éradication et reprise.</p>
+
+  <h3>À l'échelle MSSP</h3>
+  <ul class="feat">
+    <li><strong>Vue multi-tenant</strong>&nbsp;— le portail Defender multi-tenant et Azure Lighthouse (ch.03) pour opérer N clients depuis une console, avec incidents et hunting transverses.</li>
+    <li><strong>Contenu centralisé</strong>&nbsp;— règles, playbooks et workbooks packagés et distribués via detection-as-code (ch.10) vers tous les workspaces.</li>
+    <li><strong>Automatisation multi-tenant</strong>&nbsp;— playbooks conçus pour être paramétrés par tenant&nbsp;; attention au périmètre des managed identities et à l'isolation des données clients.</li>
+    <li><strong>Métriques par client</strong>&nbsp;— SLA, MTTA/MTTR par tenant, workbooks de reporting (préparés au chapitre suivant).</li>
+  </ul>
+
+  <div class="labx">
+    <span class="lab">Lab · semaines 21–22</span>
+    <ol>
+      <li>Écris un playbook d'enrichissement (managed identity, pas de secret) qui, sur un incident, ajoute réputation d'IP/URL + contexte utilisateur en commentaire.</li>
+      <li>Crée une automation rule qui, selon le type d'incident, assigne, tague et déclenche ce playbook.</li>
+      <li>Construis un playbook de réponse à validation humaine&nbsp;: proposition d'isolation d'un poste → approbation Teams → exécution ou abandon.</li>
+      <li>Simule un incident majeur et déroule le cycle NIST de bout en bout avec les tâches d'incident&nbsp;; termine par une fiche post-mortem listant 1 à 2 détections à créer.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation</span>
+    <ul>
+      <li>Tu choisis à raison entre automation rule et playbook, et tu les combines</li>
+      <li>Tu conçois une automatisation avec garde-fous sur les actions irréversibles</li>
+      <li>Tu distingues attack disruption (natif) et SOAR (tes workflows)</li>
+      <li>Tu mènes une réponse à incident complète qui reboucle sur la détection</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== CH 12 ========== -->
+<section id="ch12">
+  <div class="ch-tag"><b>Chapitre 12</b><span class="wk">Semaines 23–24</span><span class="wk">Capstone</span><span>IA · gouvernance · maîtrise</span></div>
+  <h2>IA pour le SOC, gouvernance & projet de synthèse</h2>
+  <a class="chaplink" href="chapitres/ch12-ia-gouvernance-capstone.html">Ouvrir le cours détaillé — capstone fourni, corrigé et barème sur 100</a>
+  <div class="obj">
+    <span class="lab">Objectifs du chapitre</span>
+    <ul>
+      <li>Exploiter Security Copilot et les agents — ton intersection SOC/IA</li>
+      <li>Maîtriser le data lake, les notebooks et l'optimisation du SOC</li>
+      <li>Gouverner les coûts d'ingestion et la rétention (exigence NIS2)</li>
+      <li>Consolider par un projet capstone et cadrer la suite (SC-100)</li>
+    </ul>
+  </div>
+
+  <h3>Security Copilot & les agents — ta valeur ajoutée immédiate</h3>
+  <p>Tu travailles déjà quotidiennement avec des LLM pour le SOC&nbsp;; ce chapitre te donne le cadre Microsoft pour le faire à l'échelle. <span class="ac">Security Copilot</span> s'intègre dans le portail unifié&nbsp;:</p>
+  <ul class="feat">
+    <li><strong>Capacités embarquées</strong>&nbsp;— résumé d'incident, analyse et explication de scripts/lignes de commande, génération et explication de requêtes KQL, guidage de la réponse, résumé de renseignement.</li>
+    <li><strong>Promptbooks</strong>&nbsp;— séquences de prompts réutilisables pour standardiser une investigation (l'équivalent «&nbsp;runbook IA&nbsp;»).</li>
+    <li><strong>Agents</strong>&nbsp;— des agents spécialisés (tri de phishing, etc.) qui traitent en autonomie des tâches répétitives sous supervision — le prolongement logique de ta pratique.</li>
+    <li><strong>Le modèle de coût — SCU</strong> (Security Compute Units)&nbsp;: capacité provisionnée à l'heure. La gouverner (dimensionner, mesurer le ROI par cas d'usage) fait partie du métier.</li>
+    <li><strong>MCP &amp; extensibilité</strong>&nbsp;— le serveur MCP Sentinel expose la plateforme à des agents (dont les tiens). C'est <em>exactement</em> ton profil data/IA&nbsp;: brancher des workflows agentiques sur la télémétrie de sécurité de façon gouvernée. Fais-en un atout différenciant.</li>
+  </ul>
+  <div class="note">
+    <span class="lab">Le bon niveau de confiance</span>
+    L'IA accélère le triage, la synthèse et la génération de requêtes&nbsp;; elle ne porte pas la responsabilité de la décision. Traite ses sorties comme des hypothèses à vérifier — la même rigueur que tu appliques à une détection. C'est ce qui sépare l'usage expert de l'usage naïf.
+  </div>
+
+  <h3>Data lake, notebooks & analytique avancée</h3>
+  <p>Le tier <strong>data lake</strong> permet une conservation longue et des investigations historiques. Depuis septembre 2026, les nouveaux parcours associent advanced hunting et Microsoft Fabric pour l'analyse personnalisée, les notebooks et tâches planifiées. Les anciens parcours KQL jobs restent pertinents pour les environnements concernés. Vérifie rétention effective, disponibilité et coût ; le chapitre détaillé donne le contrat de retro-hunt.</p>
+
+  <h3>Optimisation du SOC & métriques</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Levier</th><th>Ce qu'il mesure / fait</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SOC optimization</strong></td><td>Recommandations natives : combler les trous de couverture (MITRE) et optimiser la valeur des données ingérées</td></tr>
+        <tr><td><strong>MTTA / MTTR</strong></td><td>Temps moyen d'acquittement / de résolution — tes KPI de performance</td></tr>
+        <tr><td><strong>Couverture MITRE</strong></td><td>Cartographie de tes détections sur ATT&amp;CK, identification des angles morts</td></tr>
+        <tr><td><strong>Qualité des détections</strong></td><td>Taux de faux positifs, incidents par analyste, bruit — pilotage de l'amélioration continue</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Gouvernance des coûts & rétention — l'angle NIS2</h3>
+  <p>À ce niveau, tu ne subis plus la facture, tu la conçois. Les leviers&nbsp;:</p>
+  <ul class="feat">
+    <li><strong>Le bon tier pour la bonne donnée</strong>&nbsp;— Analytics (détection temps réel) vs Basic/Auxiliary (logs verbeux à bas coût) vs Data Lake (froid, rétention longue). Router chaque source via DCR selon sa valeur de détection (rappel socle + ch.03).</li>
+    <li><strong>Transformations à l'ingestion</strong>&nbsp;— filtrer/réduire au niveau DCR pour ne pas payer le bruit.</li>
+    <li><strong>Commitment tiers</strong>&nbsp;— paliers de capacité réservée pour réduire le coût au Go à volume élevé.</li>
+    <li><strong>Rétention &amp; preuve NIS2</strong>&nbsp;— séparer la rétention <em>chaude</em> (analytique, coûteuse, courte) de la conservation <em>longue</em> (data lake, économique) pour tenir les obligations de conservation des journaux sans exploser les coûts. Tu relies ici une exigence réglementaire à une architecture de données — le cœur de ta montée en compétence.</li>
+  </ul>
+
+  <div class="note">
+    <span class="lab">Feuille de route de certification</span>
+    Feuille de route actuelle : <strong>SC-900</strong> si utile → <strong>SC-200</strong> pour les opérations → <strong>SC-500</strong> pour le cloud et l'IA, après comparaison au guide officiel. <strong>AZ-500 a été retiré le 31 août 2026.</strong> SC-100 reste l'horizon architecture après consolidation de l'expérience.
+  </div>
+
+  <div class="labx">
+    <span class="lab">Projet capstone · semaines 23–24 — la preuve de ta maîtrise</span>
+    <p style="margin:0 0 10px">Un projet unique qui traverse tout le programme. Objectif&nbsp;: démontrer, bout en bout, que tu opères la plateforme comme un expert.</p>
+    <ol>
+      <li><strong>Détection</strong>&nbsp;: conçois une chaîne d'attaque réaliste (phishing → identité → endpoint → cloud) et écris les détections correspondantes, versionnées en <em>detection-as-code</em> (repo + PR + déploiement CI/CD).</li>
+      <li><strong>Corrélation</strong>&nbsp;: examine les regroupements obtenus et justifie les liens entre les preuves ; un incident unique n'est pas garanti. Mappe les comportements démontrés sur MITRE.</li>
+      <li><strong>Réponse</strong>&nbsp;: automatise l'enrichissement et une action à validation humaine&nbsp;; déroule le cycle NIST&nbsp;; produis un post-mortem.</li>
+      <li><strong>Cloud &amp; chaîne</strong>&nbsp;: montre un attack path dans Defender for Cloud et un finding DevSecOps (GHAS) reliés à ton scénario.</li>
+      <li><strong>IA &amp; reporting</strong>&nbsp;: utilise Security Copilot pour résumer l'incident&nbsp;; construis un workbook de métriques (MTTA/MTTR, couverture) ; rédige une note de conformité NIS2 reliant tes contrôles aux exigences.</li>
+    </ol>
+  </div>
+  <div class="check">
+    <span class="lab">Validation finale du programme</span>
+    <ul>
+      <li>Tu exploites Security Copilot, les agents et le MCP avec le bon niveau de confiance</li>
+      <li>Tu gouvernes ingestion, tiers et rétention en reliant coût, détection et NIS2</li>
+      <li>Ton capstone démontre la boucle complète détection → corrélation → réponse → amélioration</li>
+      <li>Ton plan de certification est cadré jusqu'à l'horizon architecte (SC-100)</li>
+      <li><strong>Tu n'es plus un analyste qui subit la plateforme : tu l'architectures.</strong></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <p class="dim" style="margin-bottom:6px">Programme expert · 12 chapitres · 6 mois (~24 semaines, ~170&nbsp;h dont la moitié en labs) · SOC + DevSecOps sur la stack Microsoft.</p>
+  <p style="margin:0 0 14px;color:var(--faint)">Jalons : SC-900 si utile → SC-200 → SC-500 → horizon SC-100. Préparation à compléter selon les guides officiels.</p>
+  <p class="dim" style="margin-bottom:14px">Documentation officielle de référence (Microsoft Learn — à jour de la plateforme SecOps unifiée)&nbsp;:</p>
+  <div class="ref">
+    <a href="https://learn.microsoft.com/en-us/azure/sentinel/ci-cd" target="_blank" rel="noopener">→ Sentinel Repositories · detection-as-code &amp; CI/CD (cœur du ch.10)</a>
+    <a href="https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-devops-introduction" target="_blank" rel="noopener">→ Defender for Cloud · DevOps security (ch.09–10)</a>
+    <a href="https://learn.microsoft.com/en-us/azure/sentinel/microsoft-sentinel-defender-portal" target="_blank" rel="noopener">→ Sentinel dans le portail Defender unifié (socle &amp; ch.03)</a>
+    <a href="https://learn.microsoft.com/en-us/azure/sentinel/kusto-overview" target="_blank" rel="noopener">→ KQL / Kusto pour Sentinel (ch.04)</a>
+    <a href="https://learn.microsoft.com/en-us/credentials/certifications/security-operations-analyst/" target="_blank" rel="noopener">→ Certification SC-200 · Security Operations Analyst</a>
+    <a href="https://learn.microsoft.com/en-us/credentials/certifications/cloud-and-ai-security-engineer-associate/" target="_blank" rel="noopener">→ Certification SC-500 · Cloud and AI Security Engineer</a>
+    <a href="https://learn.microsoft.com/en-us/credentials/certifications/cybersecurity-architect-expert/" target="_blank" rel="noopener">→ Certification SC-100 · Cybersecurity Architect (horizon)</a>
+  </div>
+  <p style="margin-top:22px;color:var(--faint);font-size:.8rem">Programme conçu pour un analyste N3 en contexte MSSP · révision du 23 octobre 2026 · <a href="ressources.html">analyse initiale, mode d'emploi et révisions</a>.</p>
+</footer>
+
+</main>
+</div>
+</div>
+
+<script src="assets/cours.js"></script>
+</body>
+</html>

@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch. 02 — Entra ID : l'identité est le périmètre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/cours.css">
+<link rel="stylesheet" href="../assets/cours-lab.css">
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap"><div class="shell">
+
+<nav class="toc" aria-label="Sommaire du chapitre">
+  <p class="toc-h">Chapitre 02</p>
+  <a href="../index.html"><span class="n">←</span>Retour à l’accueil</a>
+  <p class="toc-m">Cours</p>
+  <a href="#ouverture"><span class="n">§</span>Pourquoi ce chapitre est rentable</a>
+  <a href="#objets"><span class="n">1</span>Le modèle d'identité</a>
+  <a href="#jetons"><span class="n">2</span>OAuth, OIDC & les jetons</a>
+  <a href="#vol"><span class="n">3</span>Vol de jeton & AiTM</a>
+  <a href="#ca"><span class="n">4</span>Conditional Access</a>
+  <a href="#tables"><span class="n">5</span>Les tables de logs Entra</a>
+  <a href="#persistance"><span class="n">6</span>La persistance applicative</a>
+  <a href="#hybride"><span class="n">7</span>Hybride : quand l'on-prem contamine</a>
+  <a href="#protection"><span class="n">8</span>Identity Protection</a>
+  <a href="#enquete2"><span class="n">9</span>Enquête : un jeton volé</a>
+  <p class="toc-m">Pratique</p>
+  <a href="#lab2"><span class="n">⚑</span>Lab guidé (4 h)</a>
+  <a href="#erreurs2"><span class="n">!</span>Erreurs fréquentes</a>
+  <a href="#validation2"><span class="n">✓</span>Validation</a>
+  <p class="toc-m">Annexes</p>
+  <a href="#glossaire2"><span class="n">§</span>Glossaire</a>
+  <a href="#refs2"><span class="n">§</span>Références</a>
+</nav>
+
+<main>
+
+<div class="crumb">
+  <a href="../index.html">Cours Azure SecOps</a>
+  <span class="sep">/</span> Mois 1 — Socle plateforme
+  <span class="sep">/</span> Chapitre 02
+</div>
+
+<header class="chead">
+  <div class="kicker">Chapitre 02 · Semaines 3–4 · ~14 h</div>
+  <h1>Entra ID :<br>l'identité est le périmètre</h1>
+  <p class="lead">Le chapitre le plus rentable du programme. Dans le cloud Microsoft, il n'y a plus de pare-feu qui protège&nbsp;: <strong>le jeton d'accès <em>est</em> le périmètre</strong>. La quasi-totalité des intrusions modernes sont des connexions parfaitement « légitimes » faites avec des identifiants ou des jetons volés. Un expert SOC Azure est, d'abord et avant tout, un expert Entra ID.</p>
+  <div class="factbar">
+    <span>Théorie&nbsp;: <b>~6 h</b></span>
+    <span>Lab&nbsp;: <b>~4 h</b></span>
+    <span>Approfondissement&nbsp;: <b>~4 h</b></span>
+    <span>Prérequis&nbsp;: <b>chapitre 01</b></span>
+  </div>
+  <div class="obj" style="margin-top:22px">
+    <span class="lab">À la fin de ce chapitre, tu sais faire</span>
+    <ul>
+      <li>Distinguer sans hésiter user, app registration, service principal et identité managée — et dire pourquoi les identités <em>non humaines</em> sont le vrai sujet de sécurité</li>
+      <li>Lire un flux OAuth 2.0 / OIDC et expliquer, jeton par jeton, ce qu'implique exactement le vol de chacun (access, refresh, PRT)</li>
+      <li>Décrire l'attaque AiTM et nommer les contre-mesures qui marchent vraiment (et celles qui ne servent à rien)</li>
+      <li>Lire l'évaluation d'une politique de Conditional Access dans un sign-in log, et repérer trois trous classiques</li>
+      <li>Choisir les tables Entra et applicatives selon le type d'authentification et d'usage du jeton</li>
+      <li>Lister au moins quatre techniques de persistance dans Entra et retrouver la trace exacte de chacune dans <code>AuditLogs</code></li>
+      <li>Comprendre le pont hybride (Entra Connect) et pourquoi un AD on-prem compromis rend le cloud présumé compromis</li>
+      <li>Mener une enquête de compromission d'identité de bout en bout, du signal initial à la portée de l'exposition</li>
+    </ul>
+  </div>
+  <div class="note">
+    <span class="lab">Le lien avec le chapitre 01</span>
+    Au chapitre précédent, tu as appris à lire les traces des ressources Azure. Caller renvoie à une identité et le jeton vise une audience : ce chapitre approfondit l'identité pour comprendre ces opérations, sans supposer qu'une connexion réussie soit nécessairement légitime.
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="ouverture">
+  <h2>Pourquoi ce chapitre rapporte plus que les autres</h2>
+
+  <p>Voici un fait qui recadre tout. Quand une intrusion cloud fait les gros titres, l'image mentale par défaut est celle d'un exploit&nbsp;: une faille, un débordement de tampon, un code d'attaque sophistiqué. La réalité de terrain est beaucoup plus terne, et beaucoup plus difficile à détecter&nbsp;: <strong>l'attaquant s'est connecté. Normalement. Avec de vrais identifiants.</strong></p>
+
+  <p>Il n'y a pas de malware à trouver, pas de signature à faire correspondre, pas de port anormal ouvert. Il y a une connexion réussie, depuis un compte réel, vers un service réel — qui se distingue d'une connexion légitime par des détails&nbsp;: une IP inhabituelle, un agent utilisateur étrange, un jeton qui vit sa vie là où il ne devrait pas, une politique de sécurité qui aurait dû s'appliquer et ne l'a pas fait.</p>
+
+  <p>Détecter ça, ce n'est pas chercher le mal. C'est <strong>connaître si intimement le fonctionnement normal de l'identité qu'une anomalie subtile te saute aux yeux</strong>. D'où la densité de ce chapitre&nbsp;: il faut comprendre le mécanisme des jetons, la logique de Conditional Access et les pièges des tables de logs, parce que c'est exactement dans ces détails que se cache la différence entre un analyste qui ferme un vrai incident en « faux positif » et un expert qui le voit.</p>
+
+  <div class="why">
+    <span class="lab">Le fil conducteur du chapitre</span>
+    <p>Une idée gouverne les neuf sections&nbsp;: <strong>dans Entra ID, l'authentification (prouver qui on est) est presque toujours réussie chez l'attaquant&nbsp;; c'est l'autorisation (ce à quoi le jeton donne droit) et la <em>persistance</em> (comment il revient demain) qui portent le vrai signal.</strong> On va donc passer beaucoup de temps sur ce que devient un jeton après la connexion, et sur les traces que laisse un attaquant qui s'installe.</p>
+  </div>
+
+  <p>On procède ainsi&nbsp;: les objets d'identité et surtout les non-humains (§1), la mécanique des jetons (§2) et leur vol (§3), le moteur de décision qu'est Conditional Access et ses angles morts (§4), les tables de logs et leurs pièges d'interprétation (§5), les techniques de persistance et leurs traces (§6), le pont hybride avec l'on-prem (§7), les signaux d'Identity Protection (§8), puis une enquête complète (§9). Le lab te fera commettre et retrouver ces gestes sur un tenant de test.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="objets">
+  <h2>1. Le modèle d'identité — et pourquoi les non-humains dominent</h2>
+
+  <p>Entra ID manipule une poignée de types d'objets. Les connaître ne suffit pas&nbsp;; il faut comprendre <strong>lequel un attaquant vise, et pourquoi</strong>. Réponse en avance&nbsp;: de plus en plus, ce ne sont pas les comptes humains, mais les <em>identités applicatives</em> — parce qu'elles survivent aux réinitialisations de mot de passe et au MFA.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 400" role="img" aria-label="Les objets d'identité Entra ID, la relation app registration / service principal, et l'angle d'attaque de chacun">
+      <text class="d-cap" x="18" y="20">Identités humaines</text>
+      <rect class="d-box" x="18" y="30" width="228" height="70" rx="9"/>
+      <text class="d-lab" x="34" y="52">User</text>
+      <text class="d-sub" x="34" y="70">cloud-only ou synchronisé depuis AD</text>
+      <text class="d-sub" x="34" y="88" fill="var(--hi)">attaque : phishing, spray, MFA fatigue, AiTM</text>
+
+      <rect class="d-box" x="18" y="112" width="228" height="64" rx="9"/>
+      <text class="d-lab" x="34" y="134">Groupe / rôle d'annuaire</text>
+      <text class="d-sub" x="34" y="152">porte des droits (dont rôles privilégiés)</text>
+      <text class="d-sub" x="34" y="168" fill="var(--hi)">attaque : ajout discret d'un membre</text>
+
+      <!-- non-humains : la relation app reg / SP -->
+      <text class="d-cap" x="286" y="20" fill="var(--defender)">Identités non humaines — le vrai terrain</text>
+
+      <rect class="d-defender" x="286" y="30" width="220" height="86" rx="9"/>
+      <text class="d-lab" x="302" y="52">App registration</text>
+      <text class="d-sub" x="302" y="70">la DÉFINITION d'une application,</text>
+      <text class="d-sub" x="302" y="86">dans son tenant d'origine.</text>
+      <text class="d-sub" x="302" y="104" fill="var(--faint)">une seule, globale</text>
+
+      <rect class="d-defender" x="540" y="30" width="222" height="86" rx="9"/>
+      <text class="d-lab" x="556" y="52">Service principal</text>
+      <text class="d-sub" x="556" y="70">l'INSTANCE locale de cette app</text>
+      <text class="d-sub" x="556" y="86">dans TON tenant. Porte les</text>
+      <text class="d-sub" x="556" y="104">permissions et les connexions.</text>
+
+      <path class="d-arr" d="M506 73 L540 73" marker-end="url(#tl)"/>
+      <text class="d-sub" x="500" y="132" fill="var(--faint)">1 app registration → 1 SP par tenant où elle est utilisée</text>
+      <defs><marker id="tl" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+
+      <rect class="d-defender" x="286" y="150" width="476" height="70" rx="9"/>
+      <text class="d-lab" x="302" y="172">Managed identity</text>
+      <text class="d-sub" x="302" y="190">un service principal spécial, sans secret à gérer, lié à une ressource Azure (ch. 01).</text>
+      <text class="d-sub" x="302" y="206" fill="var(--hi)">attaque : vol du jeton via la ressource compromise (IMDS)</text>
+
+      <!-- credential = la porte -->
+      <rect class="d-hi" x="286" y="234" width="476" height="86" rx="9"/>
+      <text class="d-lab" x="302" y="256" fill="var(--hi)">Le credential — la clé de tout</text>
+      <text class="d-sub" x="302" y="274">Un service principal s'authentifie par un SECRET ou un CERTIFICAT.</text>
+      <text class="d-sub" x="302" y="290">Ajouter un credential à une app existante = une porte dérobée</text>
+      <text class="d-sub" x="302" y="306">durable, qui ignore le mot de passe et le MFA de l'humain. LA persistance cloud.</text>
+
+      <rect class="d-src" x="18" y="234" width="248" height="86" rx="9"/>
+      <text class="d-cap" x="34" y="254">La question d'expert à l'arrivée sur un tenant</text>
+      <text class="d-sub" x="34" y="274">« Qui peut créer des credentials</text>
+      <text class="d-sub" x="34" y="290">sur des apps, et quelles apps ont</text>
+      <text class="d-sub" x="34" y="306">des permissions applicatives larges ? »</text>
+
+      <rect class="d-box" x="18" y="338" width="744" height="48" rx="9"/>
+      <text class="d-cap" x="34" y="358">Pourquoi ça compte</text>
+      <text class="d-sub" x="34" y="376">Réinitialiser le mot de passe d'un humain compromis est trivial. Retirer une porte dérobée applicative que personne n'a inventoriée, non.</text>
+    </svg>
+    <figcaption><b>App registration ≠ service principal.</b> La première est la définition (globale, dans le tenant éditeur)&nbsp;; le second est l'instance qui vit dans <em>ton</em> tenant et porte les droits. Un attaquant qui « ajoute un secret » agit sur l'app registration&nbsp;; les connexions qui en résultent apparaissent sur le service principal. Confondre les deux, c'est chercher au mauvais endroit.</figcaption>
+  </figure>
+
+  <h3>Le tableau des objets et de leur angle d'attaque</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Objet</th><th>Ce que c'est</th><th>Angle attaquant</th><th>Où ça se voit</th></tr></thead>
+      <tbody>
+        <tr><td><strong>User</strong></td><td>Identité humaine, cloud-only ou synchronisée depuis AD</td><td>Phishing, password spray, MFA fatigue, AiTM</td><td><code>SigninLogs</code></td></tr>
+        <tr><td><strong>App registration</strong></td><td>La définition d'une application (parfois multi-tenant)</td><td>Ajout d'un credential (secret/certificat) = porte dérobée</td><td><code>AuditLogs</code></td></tr>
+        <tr><td><strong>Service principal</strong></td><td>L'instance locale de l'app dans ton tenant, porteuse des permissions</td><td>Permissions Graph excessives, consent phishing, connexion depuis une IP inédite</td><td><code>AADServicePrincipalSignInLogs</code>, <code>AuditLogs</code></td></tr>
+        <tr><td><strong>Managed identity</strong></td><td>Un SP sans secret, lié à une ressource Azure</td><td>Vol du jeton via l'IMDS (ch. 01), abus de ses droits</td><td><code>AADManagedIdentitySignInLogs</code></td></tr>
+        <tr><td><strong>Groupe / rôle</strong></td><td>Attribution de droits, dont les rôles d'annuaire privilégiés</td><td>Ajout silencieux à un groupe qui confère un rôle — l'escalade discrète</td><td><code>AuditLogs</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="deep">
+    <span class="lab">Approfondissement — les permissions Microsoft Graph, et la permission qui donne tout</span>
+    <p>Un service principal agit sur Microsoft 365 et Entra via <strong>Microsoft Graph</strong>, l'API unifiée. Ses permissions sont de deux natures, à ne jamais confondre&nbsp;:</p>
+    <ul class="feat">
+      <li><strong>Déléguées</strong>&nbsp;: l'app agit <em>au nom d'un utilisateur connecté</em>. La portée réelle est l'intersection des droits de l'app et de ceux de l'utilisateur. <code>Mail.Read</code> déléguée = lire le courrier de <em>l'utilisateur</em> qui a consenti.</li>
+      <li><strong>Applicatives</strong>&nbsp;: l'app agit <em>seule</em>, sans utilisateur, avec ses propres droits. <code>Mail.Read</code> applicative = lire le courrier de <strong>toutes les boîtes du tenant</strong>. La différence de portée est vertigineuse.</li>
+    </ul>
+    <p>Et il existe une permission qui mérite une alarme rouge&nbsp;: <code>Application.ReadWrite.All</code> en applicatif, ou le rôle <code>Application Administrator</code>. Le porteur peut <strong>ajouter un credential à n'importe quelle app du tenant</strong>, y compris une app hautement privilégiée&nbsp;— donc devenir cette app. C'est un chemin d'escalade vers <code>Global Administrator</code> qui ne passe par aucun mot de passe humain. Retiens ce trio de permissions applicatives « qui tuent »&nbsp;: <code>Application.ReadWrite.All</code>, <code>RoleManagement.ReadWrite.Directory</code>, <code>Directory.ReadWrite.All</code>. Les inventorier sur un tenant inconnu est l'un des premiers gestes de l'expert — on le fera dans le lab.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="jetons">
+  <h2>2. OAuth 2.0, OIDC et les jetons : ce qu'il faut vraiment comprendre</h2>
+
+  <p>Impossible de faire de la détection d'identité sérieuse sans un modèle mental clair des jetons. Pas besoin d'être développeur&nbsp;; besoin de savoir <strong>ce que chaque jeton permet, combien de temps, et ce qu'implique son vol</strong>. On construit ce modèle pas à pas.</p>
+
+  <h3>Les rôles d'un échange OAuth, en langage clair</h3>
+  <p>OAuth 2.0 répond à une question&nbsp;: comment donner à une application un accès limité à une ressource, <em>sans</em> lui confier le mot de passe de l'utilisateur&nbsp;? Quatre rôles&nbsp;:</p>
+  <ul class="feat">
+    <li>Le <strong>resource owner</strong> — l'utilisateur, propriétaire de ses données.</li>
+    <li>Le <strong>client</strong> — l'application qui veut agir (une app web, un client de messagerie…).</li>
+    <li>L'<strong>authorization server</strong> — Entra ID, qui authentifie et délivre les jetons.</li>
+    <li>Le <strong>resource server</strong> — l'API visée (Microsoft Graph, ARM, un coffre…), qui vérifie le jeton.</li>
+  </ul>
+  <p>OpenID Connect (OIDC) est une couche <em>au-dessus</em> d'OAuth qui ajoute l'<strong>authentification</strong> (prouver <em>qui</em> est l'utilisateur) via un jeton d'identité, là où OAuth ne gère que l'<em>autorisation</em> (l'accès à une ressource). En pratique, Entra fait les deux dans le même échange.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 340" role="img" aria-label="Flux d'autorisation OAuth avec émission d'un access token, d'un refresh token et d'un ID token, puis usage et renouvellement">
+      <rect class="d-src" x="18" y="40" width="120" height="60" rx="9"/>
+      <text class="d-lab" x="32" y="66">Utilisateur</text>
+      <text class="d-sub" x="32" y="84">+ son navigateur</text>
+
+      <rect class="d-defender" x="180" y="40" width="150" height="60" rx="9"/>
+      <text class="d-lab" x="194" y="62">Entra ID</text>
+      <text class="d-sub" x="194" y="80">authorization server</text>
+
+      <rect class="d-box" x="372" y="40" width="150" height="60" rx="9"/>
+      <text class="d-lab" x="386" y="62">L'application</text>
+      <text class="d-sub" x="386" y="80">le « client »</text>
+
+      <rect class="d-azure" x="564" y="40" width="198" height="60" rx="9"/>
+      <text class="d-lab" x="578" y="62">L'API (Graph, ARM…)</text>
+      <text class="d-sub" x="578" y="80">resource server</text>
+
+      <!-- flux -->
+      <path class="d-arr" d="M138 66 L180 66" marker-end="url(#tl2)"/>
+      <defs><marker id="tl2" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+      <text class="d-sub" x="130" y="30" fill="var(--faint)">1. authentifie (mot de passe + MFA)</text>
+
+      <path class="d-arr-sig" d="M255 100 L255 140" marker-end="url(#tl2)"/>
+      <text class="d-sub" x="270" y="128" fill="var(--sky)">2. Entra émet TROIS jetons →</text>
+
+      <!-- les trois jetons -->
+      <rect class="d-sentinel" x="180" y="150" width="180" height="52" rx="8"/>
+      <text class="d-sub" x="194" y="170" fill="var(--sentinel)">ID token (OIDC)</text>
+      <text class="d-sub" x="194" y="188">« voici QUI est l'utilisateur »</text>
+
+      <rect class="d-sentinel" x="372" y="150" width="180" height="52" rx="8"/>
+      <text class="d-sub" x="386" y="170" fill="var(--sentinel)">Access token (~1 h)</text>
+      <text class="d-sub" x="386" y="188">le laissez-passer vers l'API</text>
+
+      <rect class="d-hi" x="564" y="150" width="198" height="52" rx="8"/>
+      <text class="d-sub" x="578" y="170" fill="var(--hi)">Refresh token (jours/semaines)</text>
+      <text class="d-sub" x="578" y="188">« refais-moi des access tokens »</text>
+
+      <!-- usage -->
+      <path class="d-arr-sig" d="M462 202 C 462 230 640 230 660 202" stroke="var(--sky)" marker-end="url(#tl2)"/>
+      <text class="d-sub" x="470" y="248" fill="var(--sky)">3. le client présente l'access token à l'API à chaque appel</text>
+
+      <rect class="d-hi" x="180" y="264" width="582" height="60" rx="9"/>
+      <text class="d-lab" x="196" y="286" fill="var(--hi)">La conséquence sécurité, en une phrase</text>
+      <text class="d-sub" x="196" y="304">Un access token volé s'utilise jusqu'à expiration, MFA DÉJÀ satisfait. Un refresh token volé rend l'accès PERSISTANT.</text>
+      <text class="d-sub" x="196" y="318">Voler le jeton, c'est court-circuiter l'authentification entière — le mot de passe et le MFA sont déjà derrière.</text>
+    </svg>
+    <figcaption><b>L'authentification arrive au tout début, une seule fois.</b> Après, ce sont les jetons qui portent l'accès. C'est pourquoi « on a du MFA » ne protège pas d'un jeton volé&nbsp;: le MFA a déjà été satisfait au moment de l'émission. Toute la §3 découle de ce schéma.</figcaption>
+  </figure>
+
+  <h3>Les jetons, un par un, avec ce qu'implique leur vol</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Jeton</th><th>Durée de vie typique</th><th>À quoi il sert</th><th>Volé, il permet…</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Access token</strong></td><td>≈ 60–90 min</td><td>Le laissez-passer vers une ressource précise (une <em>audience</em>&nbsp;: Graph, ARM…)</td><td>…d'agir sur cette ressource jusqu'à expiration, <strong>MFA déjà satisfait</strong>. Court, mais suffisant pour beaucoup.</td></tr>
+        <tr><td><strong>Refresh token</strong></td><td>Jours à semaines (glissant)</td><td>Obtenir de nouveaux access tokens sans se réauthentifier</td><td>…un accès <strong>persistant</strong>. C'est le jeton que l'attaquant veut vraiment. Parade&nbsp;: révocation de session, CAE, token protection.</td></tr>
+        <tr><td><strong>ID token</strong></td><td>Courte</td><td>Prouver au client <em>qui</em> est l'utilisateur (OIDC)</td><td>…peu de chose seul&nbsp;; il informe le client, il n'ouvre pas la ressource.</td></tr>
+        <tr><td><strong>Primary Refresh Token (PRT)</strong></td><td>Lié au contexte et aux clés de l'appareil</td><td>Participe au SSO de l'appareil</td><td>Son abus dépend du contrôle des clés et protections associées ; copier le PRT seul ne rend pas automatiquement un autre appareil conforme.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="why">
+    <span class="lab">Le mécanisme qui répare (en partie) le problème du jeton volé — CAE</span>
+    <p>Historiquement, révoquer une session ne faisait rien tant que l'access token n'avait pas expiré (jusqu'à une heure de fenêtre pour l'attaquant). <strong>Continuous Access Evaluation (CAE)</strong> change cela&nbsp;: pour les ressources compatibles, des événements critiques (compte désactivé, mot de passe réinitialisé, risque élevé détecté, révocation explicite) sont propagés <em>quasi en temps réel</em>, et le resource server rejette le jeton immédiatement au lieu d'attendre son expiration. C'est un point que tu dois connaître pour deux raisons&nbsp;: en réponse à incident, <strong>CAE est ce qui rend la révocation réellement efficace</strong>&nbsp;; et sur un tenant qui ne l'a pas activé, tu dois savoir que « j'ai révoqué les sessions » laisse une fenêtre d'accès réelle.</p>
+  </div>
+
+  <div class="deep">
+    <span class="lab">Approfondissement — lire un jeton, et le flux « device code » qu'adorent les attaquants</span>
+    <p>Certains access tokens sont des JWT décodables, d'autres sont opaques ou chiffrés pour le client. Sur un jeton fictif ou de lab, examine aud, appid/azp, scp/roles et oid. Décoder n'est pas vérifier la signature ni la validité. L'audience indique la ressource visée, pas une intention malveillante. Pour un véritable jeton sensible, privilégie un décodage local et ne le publie pas dans le livrable.</p>
+    <p>Parmi les flux OAuth, un mérite une vigilance particulière&nbsp;: le <strong>device code flow</strong>. Conçu pour les appareils sans clavier (une TV, une console), il affiche un code court et demande à l'utilisateur d'aller sur <code>microsoft.com/devicelogin</code> pour l'entrer. Les attaquants l'ont détourné en une redoutable technique de phishing&nbsp;: ils déclenchent le flux, envoient à la victime «&nbsp;entrez ce code pour accéder au document&nbsp;», et récupèrent des jetons <em>de la victime</em> sans jamais lui présenter de fausse page — puisque la vraie page Microsoft fait tout le travail. Le signal côté logs&nbsp;: dans <code>SigninLogs</code>, un <code>AuthenticationProtocol</code> à <code>deviceCode</code> pour un compte humain qui n'a aucune raison d'utiliser ce flux. Requête de chasse à garder pour le chapitre 06.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="vol">
+  <h2>3. Le vol de jeton et l'attaque AiTM : l'intrusion sans exploit</h2>
+
+  <p>On assemble maintenant la §2 en une attaque réelle, la plus courante de l'écosystème Microsoft actuel&nbsp;: <strong>Adversary-in-the-Middle</strong> (AiTM). Elle contourne le MFA sans le casser, et sa détection repose entièrement sur les détails que tu viens d'apprendre.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 330" role="img" aria-label="Déroulé d'une attaque AiTM : le proxy de phishing relaie la connexion et capture le cookie de session après le MFA">
+      <rect class="d-src" x="18" y="120" width="120" height="70" rx="9"/>
+      <text class="d-lab" x="32" y="146">Victime</text>
+      <text class="d-sub" x="32" y="164">clique un lien</text>
+      <text class="d-sub" x="32" y="180">de phishing</text>
+
+      <rect class="d-hi" x="200" y="120" width="170" height="70" rx="9"/>
+      <text class="d-lab" x="214" y="144" fill="var(--hi)">Proxy de l'attaquant</text>
+      <text class="d-sub" x="214" y="162">(Evilginx-like) relaie</text>
+      <text class="d-sub" x="214" y="178">tout, en temps réel</text>
+
+      <rect class="d-defender" x="432" y="120" width="150" height="70" rx="9"/>
+      <text class="d-lab" x="446" y="146">Vraie page</text>
+      <text class="d-lab" x="446" y="164">Entra ID</text>
+      <text class="d-sub" x="446" y="182">MFA authentique</text>
+
+      <rect class="d-azure" x="632" y="120" width="130" height="70" rx="9"/>
+      <text class="d-lab" x="646" y="146">Microsoft 365</text>
+      <text class="d-sub" x="646" y="164">boîte mail,</text>
+      <text class="d-sub" x="646" y="180">fichiers…</text>
+
+      <path class="d-arr" d="M138 155 L200 155" marker-end="url(#tl3)"/>
+      <defs><marker id="tl3" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+      <path class="d-arr" d="M370 155 L432 155" marker-end="url(#tl3)"/>
+      <text class="d-sub" x="230" y="112" fill="var(--faint)">relaie mot de passe + MFA</text>
+
+      <path class="d-arr-sig" d="M432 175 C 400 210 240 210 285 192" stroke="var(--hi)" marker-end="url(#tl3)"/>
+      <text class="d-sub" x="250" y="232" fill="var(--hi)">le cookie de session revient… et l'attaquant le COPIE au passage</text>
+
+      <text class="d-cap" x="18" y="30">Le point clé</text>
+      <rect class="d-box" x="18" y="42" width="744" height="58" rx="9"/>
+      <text class="d-sub" x="34" y="64" fill="var(--text)">La victime fait un VRAI MFA sur la VRAIE page Microsoft. Rien n'échoue, rien n'alerte l'utilisateur.</text>
+      <text class="d-sub" x="34" y="82">Ce que l'attaquant vole, ce n'est pas le mot de passe — c'est le COOKIE DE SESSION émis APRÈS le MFA. Le MFA est déjà satisfait.</text>
+
+      <rect class="d-sentinel" x="18" y="256" width="744" height="60" rx="9"/>
+      <text class="d-lab" x="34" y="278" fill="var(--sentinel)">Les signaux qui restent — c'est là que tu gagnes</text>
+      <text class="d-sub" x="34" y="296">Deux connexions réussies pour le même compte, proches dans le temps, depuis DEUX IP/pays très différents ;</text>
+      <text class="d-sub" x="34" y="312">un agent utilisateur ou une empreinte d'appareil qui change brutalement ; un refresh token rejoué depuis un ASN d'hébergeur.</text>
+    </svg>
+    <figcaption><b>AiTM peut capturer une session après le MFA.</b> FIDO2/passkeys résistent au phishing par liaison à l'origine. L'exigence d'appareil et la protection des jetons sont complémentaires, avec une couverture dépendante des clients et ressources ; elles ne sont pas interchangeables.</figcaption>
+  </figure>
+
+  <h3>Ce qui marche vraiment contre AiTM (et ce qui ne sert à rien)</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Contre-mesure</th><th>Efficace contre AiTM&nbsp;?</th><th>Pourquoi</th></tr></thead>
+      <tbody>
+        <tr><td>MFA par SMS ou appli d'authentification (push, OTP)</td><td><span class="sev h">Non</span></td><td>Le proxy relaie le défi et la réponse&nbsp;; le cookie post-MFA est capturé quand même.</td></tr>
+        <tr><td>MFA résistant au phishing&nbsp;: <strong>FIDO2 / passkeys</strong>, Windows Hello</td><td><span class="sev l">Oui</span></td><td>La preuve est liée cryptographiquement au domaine légitime&nbsp;; le proxy sur un faux domaine ne peut pas la produire.</td></tr>
+        <tr><td>Conditional Access exigeant un <strong>appareil conforme / hybride</strong></td><td><span class="sev m">Selon le flux</span></td><td>Réduit les chemins d'accès, mais ne lie pas à elle seule tous les jetons et cookies à l'appareil. Vérifier les clients, ressources et protections de jeton.</td></tr>
+        <tr><td><strong>Token protection</strong> (liaison du jeton à l'appareil)</td><td><span class="sev m">Partiel/émergent</span></td><td>Rend le refresh token inutilisable ailleurs que sur l'appareil d'origine&nbsp;; couverture encore partielle selon les clients.</td></tr>
+        <tr><td>Détection <em>a posteriori</em> (impossible travel, session anormale)</td><td><span class="sev m">Complément</span></td><td>Ne <em>prévient</em> pas, mais rattrape&nbsp;: c'est ton terrain d'analyste. Indispensable en défense en profondeur.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · deux connexions réussies, deux pays, même compte, fenêtre courte (signal AiTM)</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1d</span>)
+<span class="k">| where</span> ResultType <span class="o">==</span> <span class="s">"0"</span>                          <span class="c">// connexions RÉUSSIES seulement</span>
+<span class="k">| extend</span> pays <span class="o">=</span> <span class="f">tostring</span>(LocationDetails.countryOrRegion)
+<span class="k">| summarize</span> pays_distincts <span class="o">=</span> <span class="f">make_set</span>(pays),
+            ip_distinctes  <span class="o">=</span> <span class="f">dcount</span>(IPAddress),
+            n <span class="o">=</span> <span class="f">count</span>()
+        <span class="k">by</span> UserPrincipalName, <span class="f">bin</span>(TimeGenerated, <span class="k">1h</span>)
+<span class="k">| where</span> <span class="f">array_length</span>(pays_distincts) <span class="o">&gt;</span> <span class="k">1</span>          <span class="c">// plusieurs pays dans la même heure</span>
+<span class="k">| sort by</span> n <span class="k">desc</span></pre>
+  </div>
+
+  <div class="pitfall">
+    <span class="lab">Le piège du faux positif — et pourquoi il ne dispense pas d'enquêter</span>
+    <p>Cette requête lève des faux positifs légitimes&nbsp;: un VPN d'entreprise qui sort dans un autre pays, un utilisateur en déplacement, un service cloud qui s'authentifie « au nom de » l'utilisateur depuis un datacenter. <strong>Ce n'est pas une raison de l'ignorer&nbsp;— c'est une raison de l'enrichir.</strong> Les bons critères de tri&nbsp;: l'un des points est-il un <em>ASN d'hébergeur</em> (Azure, AWS, OVH…) plutôt qu'un FAI grand public&nbsp;? L'agent utilisateur change-t-il de façon incohérente&nbsp;? La seconde connexion est-elle <em>non interactive</em> (un refresh token rejoué)&nbsp;? On construira ce raffinement au chapitre 06&nbsp;; ici, retiens la logique&nbsp;: un signal bruyant se transforme en détection utile par l'<em>enrichissement</em>, pas par le durcissement aveugle du seuil.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="ca">
+  <h2>4. Conditional Access : le moteur de décision, et ses trous</h2>
+
+  <p>Chaque tentative de connexion à un service Entra traverse les politiques de <strong>Conditional Access</strong> (CA). Ton rôle d'analyste n'est pas d'écrire ces politiques&nbsp;; c'est de <strong>lire vite leur évaluation</strong> dans un sign-in log, et de <strong>repérer leurs trous</strong>. Les deux se font mal sans un modèle mental de la façon dont une politique est structurée.</p>
+
+  <h3>L'anatomie d'une politique : SI (conditions) ALORS (contrôles)</h3>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 350" role="img" aria-label="Structure d'une politique de Conditional Access : les conditions d'entrée et les contrôles d'octroi et de session">
+      <text class="d-cap" x="18" y="22" fill="var(--sky)">SI — les conditions (à qui/quoi la politique s'applique)</text>
+      <rect class="d-azure" x="18" y="34" width="360" height="150" rx="10"/>
+      <text class="d-sub" x="34" y="58" fill="var(--text)">Utilisateurs &amp; groupes (et EXCLUSIONS)</text>
+      <text class="d-sub" x="34" y="80" fill="var(--text)">Applications cloud ciblées</text>
+      <text class="d-sub" x="34" y="102" fill="var(--text)">Conditions :</text>
+      <text class="d-sub" x="48" y="120">· plateforme (Windows, iOS…)   · localisation / IP</text>
+      <text class="d-sub" x="48" y="136">· type de client (navigateur, appli, LEGACY)</text>
+      <text class="d-sub" x="48" y="152">· risque de connexion / risque utilisateur (Id. Protection)</text>
+      <text class="d-sub" x="48" y="168" fill="var(--faint)">le risque relie CA à la §8</text>
+
+      <path class="d-arr-sig" d="M378 109 L430 109" marker-end="url(#tl4)"/>
+      <defs><marker id="tl4" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--sky)"/></marker></defs>
+
+      <text class="d-cap" x="432" y="22" fill="var(--devops)">ALORS — les contrôles</text>
+      <rect class="d-devops" x="432" y="34" width="330" height="86" rx="10"/>
+      <text class="d-sub" x="448" y="56" fill="var(--text)">Contrôles d'OCTROI (grant)</text>
+      <text class="d-sub" x="448" y="76">· bloquer   · exiger MFA</text>
+      <text class="d-sub" x="448" y="92">· exiger un appareil conforme / hybride</text>
+      <text class="d-sub" x="448" y="108">· exiger une appli approuvée / une politique de protection</text>
+
+      <rect class="d-devops" x="432" y="132" width="330" height="52" rx="10"/>
+      <text class="d-sub" x="448" y="154" fill="var(--text)">Contrôles de SESSION</text>
+      <text class="d-sub" x="448" y="172">· fréquence de reconnexion   · restrictions app · pas de persistance</text>
+
+      <rect class="d-hi" x="18" y="210" width="744" height="60" rx="9"/>
+      <text class="d-lab" x="34" y="232" fill="var(--hi)">Deux règles d'évaluation à ne jamais oublier</text>
+      <text class="d-sub" x="34" y="250">1. Toutes les politiques applicables sont évaluées, et le BLOCAGE l'emporte toujours sur tout autre contrôle.</text>
+      <text class="d-sub" x="34" y="266">2. Une politique ne s'applique QUE si sa condition matche. Une app, une plateforme ou un protocole non couvert = pas de contrôle du tout.</text>
+
+      <rect class="d-src" x="18" y="286" width="744" height="52" rx="9"/>
+      <text class="d-cap" x="34" y="306">Le mode « report-only »</text>
+      <text class="d-sub" x="34" y="326">Une politique en report-only est ÉVALUÉE et JOURNALISÉE mais N'APPLIQUE RIEN. Parfait pour tester — dangereux si on la croit active.</text>
+    </svg>
+    <figcaption><b>La force et la faiblesse de CA sont la même chose&nbsp;: la précision des conditions.</b> Une politique très ciblée protège exactement ce qu'elle vise — et <em>rien d'autre</em>. Les trous de CA ne sont presque jamais des politiques « mal écrites »&nbsp;; ce sont des cas <em>non couverts</em> par une condition.</figcaption>
+  </figure>
+
+  <h3>Les trous classiques — ceux que tu dois savoir nommer</h3>
+  <ul class="feat">
+    <li><strong>L'authentification basique/héritée encore autorisée.</strong> Ces flux ne peuvent pas satisfaire un défi MFA moderne ; une politique CA applicable peut les bloquer. POP/IMAP/SMTP peuvent aussi utiliser OAuth selon le service : distingue protocole et méthode d'authentification. Vérifie l'état réel, les exclusions et ClientAppUsed plutôt que d'assimiler un protocole entier au contournement MFA.</li>
+    <li><strong>Les exclusions permanentes.</strong> Le grand classique&nbsp;: des « comptes de service » exclus de <em>toutes</em> les politiques MFA « parce que ça cassait un script ». Chaque exclusion est un compte à haute valeur sans MFA — la première cible. Un attaquant qui a lu la config CA sait exactement lesquels viser.</li>
+    <li><strong>Les applications non couvertes.</strong> Une politique qui cible « Office 365 » ne couvre pas forcément <em>toutes</em> les applications&nbsp;; une app tierce ou une API oubliée passe à travers. Préférer « toutes les applications cloud » avec exclusions maîtrisées plutôt qu'une liste blanche qui vieillit mal.</li>
+    <li><strong>L'absence de politique sur l'enrôlement MFA lui-même.</strong> Si l'inscription au MFA n'est pas protégée (par la localisation, l'appareil…), un attaquant qui a le mot de passe peut <strong>enrôler sa propre méthode MFA</strong> et devenir légitime. On surveille l'opération <code>AuditLogs</code> correspondante (enregistrement d'informations de sécurité).</li>
+    <li><strong>Report-only pris pour actif.</strong> Une politique laissée en report-only après un test « réussi » ne protège rien&nbsp;; elle rassure sans agir. À vérifier explicitement.</li>
+  </ul>
+
+  <div class="why">
+    <span class="lab">Comment lire l'évaluation CA d'un sign-in — la compétence pratique de la section</span>
+    <p>Dans un enregistrement <code>SigninLogs</code>, le champ <code>ConditionalAccessPolicies</code> est un tableau qui liste, pour cette connexion précise, <em>chaque</em> politique et son résultat&nbsp;: <code>success</code>, <code>failure</code>, <code>notApplied</code> (la condition ne matchait pas) ou <code>reportOnlySuccess/Failure</code>. Le champ <code>ConditionalAccessStatus</code> donne le verdict global. <strong>La colonne qui t'intéresse le plus est souvent <code>notApplied</code></strong>&nbsp;: elle te dit quelles protections <em>ne se sont pas déclenchées</em> pour cette connexion, et donc par où un accès a pu passer. En investigation d'une connexion suspecte réussie, la première question est&nbsp;: « quelles politiques auraient dû s'appliquer et ne l'ont pas fait&nbsp;? ».</p>
+  </div>
+
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · les connexions où le MFA n'a PAS été exigé (à cause de quelle politique non appliquée ?)</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1d</span>)
+<span class="k">| where</span> ResultType <span class="o">==</span> <span class="s">"0"</span>
+<span class="k">| where</span> AuthenticationRequirement <span class="o">==</span> <span class="s">"singleFactorAuthentication"</span>   <span class="c">// pas de MFA</span>
+<span class="k">| extend</span> client <span class="o">=</span> <span class="f">tostring</span>(ClientAppUsed)
+<span class="k">| summarize</span> n <span class="o">=</span> <span class="f">count</span>() <span class="k">by</span> UserPrincipalName, AppDisplayName, client
+<span class="k">| where</span> client <span class="o">==</span> <span class="s">"Other clients"</span> <span class="o">or</span> n <span class="o">&gt;</span> <span class="k">50</span>          <span class="c">// legacy, ou volume anormal sans MFA</span>
+<span class="k">| sort by</span> n <span class="k">desc</span></pre>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="tables">
+  <h2>5. Les tables de logs Entra, et leurs pièges d'interprétation</h2>
+
+  <p>Une enquête d'identité doit couvrir les authentifications interactives et non interactives, les SP/MI et les journaux des ressources utilisées. Les proportions de volume dépendent du tenant. Le rejeu d'un access token auprès d'un service ne produit pas nécessairement un nouveau sign-in Entra.</p>
+
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Table</th><th>Contenu</th><th>Le piège — et pourquoi il coûte cher</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>SigninLogs</code></td>
+          <td>Connexions <strong>interactives</strong> d'utilisateurs (l'humain tape/valide quelque chose)</td>
+          <td>Une partie seulement des authentifications ; à compléter avec les autres types et les traces d'accès aux ressources.</td>
+        </tr>
+        <tr>
+          <td><code>AADNonInteractiveUserSignInLogs</code></td>
+          <td>Connexions par jeton, <strong>sans interaction</strong> (refresh token, clients qui renouvellent en arrière-plan)</td>
+          <td>Utile pour les authentifications sans interaction et renouvellements. Elle ne contient pas chaque appel API utilisant un access token.</td>
+        </tr>
+        <tr>
+          <td><code>AADServicePrincipalSignInLogs</code></td>
+          <td>Connexions des service principals (apps agissant seules)</td>
+          <td>Une origine nouvelle est à examiner. Les SP peuvent utiliser secret, certificat ou fédération d'identité ; le MFA utilisateur ne s'applique pas au flux app-only.</td>
+        </tr>
+        <tr>
+          <td><code>AADManagedIdentitySignInLogs</code></td>
+          <td>Connexions des identités managées</td>
+          <td>Une managed identity qui obtient un jeton pour une audience inhabituelle rejoint l'analyse IMDS du chapitre 01.</td>
+        </tr>
+        <tr>
+          <td><code>AuditLogs</code></td>
+          <td>Changements d'annuaire&nbsp;: rôles, apps, credentials, politiques CA, groupes, consentements</td>
+          <td><strong>La persistance de l'attaquant s'écrit ici.</strong> Surveille <code>Add service principal credentials</code>, <code>Consent to application</code>, <code>Update conditional access policy</code>, <code>Add member to role</code>. C'est la table de la §6.</td>
+        </tr>
+        <tr>
+          <td><code>AADRiskyUsers</code> / <code>AADUserRiskEvents</code> (ou <code>RiskDetections</code>)</td>
+          <td>Signaux d'Identity Protection (voyage impossible, IP anonyme, fuite de credentials…)</td>
+          <td>Un risque « <em>dismissed</em> » (rejeté) sans justification est <strong>en soi</strong> un événement à revoir&nbsp;: qui l'a rejeté, et pourquoi&nbsp;?</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Décoder un <code>ResultType</code> : le langage des échecs</h3>
+  <p>Le champ <code>ResultType</code> d'un sign-in porte un code numérique&nbsp;: <code>0</code> = succès, tout le reste = un échec avec une cause précise. <strong>Les connaître transforme ta lecture des logs</strong>, parce qu'un motif d'échec raconte une histoire&nbsp;— un password spray et un utilisateur qui a oublié son mot de passe ne produisent pas les mêmes codes.</p>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Code</th><th>Signification</th><th>Ce que ça raconte souvent</th></tr></thead>
+      <tbody>
+        <tr><td><code>0</code></td><td>Succès</td><td>La connexion a abouti — regarde alors <code>AuthenticationRequirement</code> et l'évaluation CA</td></tr>
+        <tr><td><code>50126</code></td><td>Identifiant ou mot de passe invalide</td><td>En rafale sur beaucoup de comptes depuis une IP&nbsp;: <strong>password spray</strong></td></tr>
+        <tr><td><code>50053</code></td><td>Verrouillage ou blocage lié à une origine jugée malveillante</td><td>Lire le détail d'échec ; le code seul ne prouve ni brute-force ni mot de passe correct</td></tr>
+        <tr><td><code>50074</code> / <code>50076</code></td><td>Authentification forte requise ou non satisfaite</td><td>Examiner le flux et les détails ; ne pas en déduire seul la connaissance du mot de passe</td></tr>
+        <tr><td><code>50140</code></td><td>Interruption « garder la session ouverte »</td><td>Bénin, mais pollue les stats — à connaître pour ne pas s'y perdre</td></tr>
+        <tr><td><code>53003</code></td><td>Bloqué par une politique de Conditional Access</td><td>CA a fait son travail&nbsp;; une rafale de <code>53003</code> peut trahir un attaquant qui tâtonne</td></tr>
+        <tr><td><code>500121</code></td><td>Échec de la validation MFA (ex. refus/expiration)</td><td>En volume sur un compte&nbsp;: <strong>MFA fatigue</strong> — on matraque la victime de notifications</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code">
+    <div class="bar"><span class="ttl">KQL · échecs multi-comptes puis succès d'une identité ciblée</span></div>
+<pre>let Failures = SigninLogs
+    | where TimeGenerated &gt; ago(1d) and ResultType == "50126"
+    | where isnotempty(UserPrincipalName)
+    | extend UserKey=tolower(UserPrincipalName);
+let Origins = Failures
+    | summarize Targets=dcount(UserKey), Attempts=count() by IPAddress
+    | where Targets &gt; 10 and Attempts &gt; 20;
+let Targets = Failures
+    | join kind=leftsemi Origins on IPAddress
+    | summarize LastFailure=max(TimeGenerated) by IPAddress, UserKey;
+SigninLogs
+| where TimeGenerated &gt; ago(1d) and ResultType == "0"
+| extend UserKey=tolower(UserPrincipalName)
+| join kind=inner Targets on IPAddress, UserKey
+| where TimeGenerated &gt; LastFailure and TimeGenerated &lt;= LastFailure + 1h
+| project TimeGenerated, UserKey, IPAddress, LastFailure, AppDisplayName</pre>
+  </div>
+
+  <div class="pitfall">
+    <span class="lab">Le piège qui invalide une enquête entière</span>
+    <p>Une seule connexion observée ne signifie pas un seul accès aux données. Interroge les sign-ins interactifs et non interactifs, les identités applicatives pertinentes et les journaux du service utilisé. Un access token peut être présenté plusieurs fois sans nouvelle authentification Entra. Documente donc aussi la couverture de Microsoft Graph, du mail, du stockage ou du service visé.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="persistance">
+  <h2>6. La persistance applicative : ce qui survit au reset de mot de passe</h2>
+
+  <p>On arrive au cœur du chapitre. Quand un attaquant a compromis une identité, sa priorité n'est pas d'agir vite&nbsp;— c'est de <strong>s'assurer de revenir demain</strong>, même après que la victime a changé son mot de passe et que le MFA a été durci. Cette persistance s'écrit presque toujours dans <code>AuditLogs</code>, et la reconnaître est une compétence d'expert directement monnayable.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 780 330" role="img" aria-label="Les principales techniques de persistance dans Entra ID et l'opération AuditLogs qui les trahit">
+      <text class="d-cap" x="18" y="22" fill="var(--hi)">Techniques de persistance — et leur trace exacte</text>
+
+      <rect class="d-hi" x="18" y="34" width="366" height="66" rx="9"/>
+      <text class="d-lab" x="34" y="56">1. Credential sur une app</text>
+      <text class="d-sub" x="34" y="74">un secret/certificat ajouté à une app existante</text>
+      <text class="d-sub" x="34" y="90" fill="var(--sentinel)">AuditLogs : "Add service principal credentials"</text>
+
+      <rect class="d-hi" x="398" y="34" width="364" height="66" rx="9"/>
+      <text class="d-lab" x="414" y="56">2. Consentement illicite</text>
+      <text class="d-sub" x="414" y="74">une app tierce obtient des permissions déléguées</text>
+      <text class="d-sub" x="414" y="90" fill="var(--sentinel)">AuditLogs : "Consent to application"</text>
+
+      <rect class="d-hi" x="18" y="112" width="366" height="66" rx="9"/>
+      <text class="d-lab" x="34" y="134">3. Permission applicative large</text>
+      <text class="d-sub" x="34" y="152">Mail.Read, Directory.ReadWrite.All en app-only</text>
+      <text class="d-sub" x="34" y="168" fill="var(--sentinel)">AuditLogs : "Add app role assignment to SP"</text>
+
+      <rect class="d-hi" x="398" y="112" width="364" height="66" rx="9"/>
+      <text class="d-lab" x="414" y="134">4. Ajout à un rôle privilégié</text>
+      <text class="d-sub" x="414" y="152">se glisser dans Global/Privileged Role Admin</text>
+      <text class="d-sub" x="414" y="168" fill="var(--sentinel)">AuditLogs : "Add member to role"</text>
+
+      <rect class="d-hi" x="18" y="190" width="366" height="66" rx="9"/>
+      <text class="d-lab" x="34" y="212">5. Nouvelle méthode MFA enrôlée</text>
+      <text class="d-sub" x="34" y="230">l'attaquant enrôle SON téléphone/sa clé</text>
+      <text class="d-sub" x="34" y="246" fill="var(--sentinel)">AuditLogs : registration d'auth. method</text>
+
+      <rect class="d-hi" x="398" y="190" width="364" height="66" rx="9"/>
+      <text class="d-lab" x="414" y="212">6. Affaiblir Conditional Access</text>
+      <text class="d-sub" x="414" y="230">exclure un compte, désactiver une policy</text>
+      <text class="d-sub" x="414" y="246" fill="var(--sentinel)">AuditLogs : "Update conditional access policy"</text>
+
+      <rect class="d-box" x="18" y="268" width="744" height="52" rx="9"/>
+      <text class="d-cap" x="34" y="288">Le point commun — et ta stratégie de détection</text>
+      <text class="d-sub" x="34" y="308">Toutes passent par un changement d'ANNUAIRE, donc par AuditLogs. Surveiller ces 6 opérations couvre l'essentiel de la persistance cloud.</text>
+    </svg>
+    <figcaption><b>La persistance applicative est le mode opératoire signature des acteurs étatiques sur le cloud Microsoft</b> (l'incident Midnight Blizzard de 2024 en est l'exemple public). Elle survit au reset de mot de passe et au MFA parce qu'elle ne repose sur <em>ni l'un ni l'autre</em>&nbsp;: elle repose sur un credential applicatif que personne n'a inventorié.</figcaption>
+  </figure>
+
+  <h3>Le scénario complet, tel qu'il se déroule vraiment</h3>
+  <p>Relie les pièces. Un attaquant obtient, par AiTM, la session d'un utilisateur qui se trouve avoir le rôle <code>Application Administrator</code> (§1). Il ne fait rien de bruyant. Il&nbsp;:</p>
+  <ol style="margin:8px 0 14px;padding-left:22px;color:#dbe4f3">
+    <li>repère une app existante et légitime dotée de permissions Graph larges (par ex. une app d'archivage mail avec <code>Mail.Read</code> applicatif)&nbsp;;</li>
+    <li>lui <strong>ajoute un credential à lui</strong> (un secret qu'il contrôle)&nbsp;;</li>
+    <li>s'authentifie désormais <em>en tant que cette app</em>, avec le flux <em>client credentials</em> (app-only, aucun humain, aucun MFA)&nbsp;;</li>
+    <li>lit le courrier de tout le tenant, tranquillement, par Graph — et revient quand il veut, même après le reset du mot de passe de la victime initiale.</li>
+  </ol>
+  <p>La victime a changé son mot de passe&nbsp;? Aucune importance&nbsp;: l'attaquant n'utilise plus son compte. Le MFA a été durci&nbsp;? Aucune importance&nbsp;: le flux app-only n'a pas de MFA. <strong>La seule façon de l'expulser est de trouver et révoquer le credential qu'il a ajouté</strong> — ce qui suppose de savoir qu'il existe.</p>
+
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · les credentials posés sur des apps ces 30 derniers jours (le geste de persistance n°1)</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">30d</span>)
+<span class="k">| where</span> OperationName <span class="o">in</span> (<span class="s">"Add service principal credentials"</span>,
+                          <span class="s">"Update application - Certificates and secrets management"</span>)
+<span class="k">| extend</span> acteur <span class="o">=</span> <span class="f">tostring</span>(InitiatedBy.user.userPrincipalName),
+         acteur_app <span class="o">=</span> <span class="f">tostring</span>(InitiatedBy.app.displayName),
+         cible <span class="o">=</span> <span class="f">tostring</span>(TargetResources[<span class="k">0</span>].displayName)
+<span class="k">| project</span> TimeGenerated, acteur, acteur_app, OperationName, cible, Result, InitiatedBy
+<span class="k">| sort by</span> TimeGenerated <span class="k">desc</span></pre>
+  </div>
+
+  <div class="why">
+    <span class="lab">Comment lire le résultat — et l'astuce du champ <code>InitiatedBy</code></span>
+    <p><code>InitiatedBy</code> peut désigner un <em>humain</em> (<code>InitiatedBy.user</code>) ou une <em>application</em> (<code>InitiatedBy.app</code>) — d'où les deux extractions. Un credential ajouté par une <em>application</em> plutôt que par un humain identifié est déjà plus inquiétant (une app qui s'auto-propage des accès). Ensuite&nbsp;: le geste est-il attendu&nbsp;? Un ajout de secret par un ingénieur, en heures ouvrées, sur une app de développement, corrélé à un ticket&nbsp;: banal. Le même geste, la nuit, par un compte qui n'administre jamais d'apps, sur une app à permissions larges&nbsp;: c'est ton incident. <strong>La détection utile n'est pas « un credential a été ajouté » (ça arrive tous les jours) mais « un credential a été ajouté <em>hors du contexte normal</em> ».</strong> Distinguer les deux est tout le travail du chapitre 05.</p>
+  </div>
+
+  <div class="deep">
+    <span class="lab">Approfondissement — les cinq persistances à vérifier en premier sur un tenant inconnu</span>
+    <p>Quand tu prends en main un tenant (nouvel employeur, nouveau client MSSP, réponse à incident), voici l'ordre de vérification qui donne le meilleur retour sur le temps investi&nbsp;:</p>
+    <ul class="feat">
+      <li><strong>Les credentials récents sur des apps</strong> (la requête ci-dessus) — surtout sur des apps à permissions applicatives larges.</li>
+      <li><strong>Les permissions applicatives dangereuses</strong> — inventorier qui détient <code>Application.ReadWrite.All</code>, <code>RoleManagement.ReadWrite.Directory</code>, <code>Directory.ReadWrite.All</code>, <code>Mail.*</code> en app-only.</li>
+      <li><strong>Les membres des rôles privilégiés</strong> — <code>Global Administrator</code> et consorts&nbsp;: combien, lesquels sont des comptes de service, lesquels ne devraient plus être là.</li>
+      <li><strong>Les exclusions de Conditional Access</strong> — chaque compte exclu d'une politique MFA est une cible.</li>
+      <li><strong>Les consentements à des applications tierces</strong> — apps multi-tenant ayant obtenu des permissions, notamment <code>offline_access</code> (qui donne un refresh token) + <code>Mail.Read</code>.</li>
+    </ul>
+    <p>Cette liste est un livrable du lab. C'est aussi, littéralement, une prestation d'audit qu'un MSSP facture&nbsp;: « revue de posture d'identité Entra ». Savoir la produire de mémoire vaut de l'argent.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="hybride">
+  <h2>7. Hybride : là où l'on-prem contamine le cloud</h2>
+
+  <p>La plupart des tenants d'entreprise ne sont pas nés dans le cloud&nbsp;: ils sont <strong>hybrides</strong>, synchronisés depuis un Active Directory on-premises via <strong>Entra Connect</strong>. Cette passerelle est un pivot d'attaque majeur, et un principe d'investigation en découle&nbsp;: <strong>un AD on-prem compromis rend le cloud présumé compromis.</strong></p>
+
+  <h3>Les trois modes d'authentification hybride</h3>
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Mode</th><th>Comment l'authentification se fait</th><th>Risque spécifique</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PHS</strong> — Password Hash Sync</td><td>Un <em>hash du hash</em> du mot de passe est synchronisé vers Entra&nbsp;; l'authentification se fait dans le cloud</td><td>Le serveur de sync détient de quoi rejouer&nbsp;; sa compromission est critique. Mais le cloud reste disponible si l'on-prem tombe.</td></tr>
+        <tr><td><strong>PTA</strong> — Pass-Through Auth</td><td>Entra transmet la validation à un agent on-prem qui interroge l'AD en direct</td><td>Un agent PTA compromis peut valider <em>n'importe quelle</em> authentification&nbsp;: porte dérobée totale sur les connexions.</td></tr>
+        <tr><td><strong>Fédération</strong> (ADFS)</td><td>Un serveur ADFS on-prem émet les jetons SAML qu'Entra accepte</td><td><strong>Golden SAML</strong>&nbsp;: qui vole le certificat de signature d'ADFS peut <em>forger</em> des jetons pour n'importe qui, MFA inclus, sans laisser de trace de connexion normale.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pitfall">
+    <span class="lab">Golden SAML — pourquoi c'est le cauchemar de l'analyste</span>
+    <p>Dans une attaque Golden SAML (rendue célèbre par l'affaire SolarWinds/2020), l'attaquant qui contrôle le certificat de signature d'ADFS fabrique des jetons SAML valides <em>en dehors</em> du flux d'authentification. Résultat&nbsp;: la connexion apparaît comme parfaitement légitime côté Entra — bonne signature, MFA « satisfait » — alors qu'<strong>aucune authentification réelle n'a eu lieu</strong>. Les signaux ne sont pas dans le fait de la connexion mais dans ses <em>anomalies</em>&nbsp;: un jeton avec une durée de vie inhabituelle, une revendication d'authentification incohérente, un <code>issuer</code> qui ne correspond pas au chemin attendu, une connexion fédérée pour un compte censé être cloud-only. C'est un cas limite, mais il illustre le principe du chapitre&nbsp;: <strong>quand l'authentification elle-même est truquée, la détection se déplace vers les propriétés du jeton et la cohérence, pas vers le succès/échec.</strong></p>
+  </div>
+
+  <h3>Le compte de synchronisation, cible permanente</h3>
+  <p>Entra Connect s'appuie sur des comptes à hauts privilèges des deux côtés&nbsp;: un compte connecteur côté AD (souvent préfixé <code>MSOL_</code>) avec des droits de réplication d'annuaire, et un compte de synchronisation côté Entra. Ces comptes&nbsp;:</p>
+  <ul class="feat">
+    <li>sont <strong>exclus des politiques CA</strong> par nécessité (ils tournent en arrière-plan) — donc sans MFA&nbsp;;</li>
+    <li>détiennent des droits assez larges pour être un objectif prioritaire&nbsp;;</li>
+    <li>sont un pont&nbsp;: qui compromet le serveur Entra Connect touche <em>les deux</em> annuaires.</li>
+  </ul>
+  <p>Le pont de détection côté on-prem s'appelle <strong>Microsoft Defender for Identity</strong> (MDI), qui pose des capteurs sur les contrôleurs de domaine et le serveur ADFS/Connect&nbsp;; c'est l'objet du chapitre 08. Retiens ici la connexion&nbsp;: la sécurité de ton identité <em>cloud</em> dépend d'un composant <em>on-prem</em> que tu dois apprendre à surveiller.</p>
+
+  <div class="note warn">
+    <span class="lab">Le principe d'investigation à graver</span>
+    Devant une compromission d'identité dans un tenant hybride, tu dois toujours te poser la question du sens de propagation&nbsp;: la compromission est-elle née dans le cloud (phishing, AiTM) ou <strong>vient-elle de l'on-prem</strong> (AD compromis, puis pivot via le serveur de sync)&nbsp;? Les deux appellent des réponses différentes, et un reset côté cloud ne sert à rien si la racine est un AD encore aux mains de l'attaquant. « Cloud compromis&nbsp;? Vérifie l'état de l'on-prem avant de déclarer l'incident clos. »
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="protection">
+  <h2>8. Identity Protection : les signaux prêts à l'emploi</h2>
+
+  <p>Microsoft calcule en continu un <strong>risque</strong> par connexion et par utilisateur, à partir de son télémétrie planétaire. C'est <em>Identity Protection</em>&nbsp;: une source de signaux de haute qualité que tu dois savoir exploiter — et dont tu dois connaître les limites.</p>
+
+  <div class="tbl">
+    <table class="data">
+      <thead><tr><th>Type de risque</th><th>Exemples de détections</th><th>Fiabilité</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Risque de connexion</strong> (sign-in risk)</td><td>Voyage impossible, IP anonyme (Tor/VPN), IP liée à un malware, propriétés de connexion inhabituelles, adresse IP suspecte</td><td>Évalué en temps réel&nbsp;; peut alimenter une politique CA (bloquer/exiger MFA si risque élevé)</td></tr>
+        <tr><td><strong>Risque utilisateur</strong> (user risk)</td><td>Identifiants trouvés dans une fuite (leaked credentials), activité cohérente avec un compte compromis</td><td>Plus lent, plus « lourd »&nbsp;; le <em>leaked credentials</em> est un signal fort et concret</td></tr>
+        <tr><td><strong>Détections hors ligne</strong></td><td>Analyses corrélées <em>a posteriori</em> par Microsoft (parfois heures après)</td><td>Arrivent en différé&nbsp;: un compte peut passer « à risque » longtemps après les faits</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="why">
+    <span class="lab">Comment un expert s'en sert — deux usages, pas un</span>
+    <p><strong>En prévention</strong>&nbsp;: brancher le risque dans Conditional Access (§4) — «&nbsp;si risque de connexion élevé, alors bloquer ou exiger un MFA résistant au phishing&nbsp;». C'est de la défense automatique. <strong>En détection/chasse</strong>&nbsp;: traiter <code>AADUserRiskEvents</code> / <code>RiskDetections</code> comme une source de leads à corréler avec le reste. Et un réflexe précis&nbsp;: <strong>surveiller les risques « rejetés » (<em>dismissed</em>)</strong>. Rejeter un risque est une action légitime (un analyste juge que c'est un faux positif) — mais un rejet <em>massif</em> ou <em>par un compte inhabituel</em> peut être un attaquant qui nettoie ses traces. Le méta-signal « qui rejette les alertes de risque, et est-ce normal&nbsp;? » est typiquement le genre de finesse qui distingue un expert.</p>
+  </div>
+
+  <div class="pitfall">
+    <span class="lab">Ne jamais traiter Identity Protection comme une vérité absolue</span>
+    <p>Deux limites à intégrer. <strong>Un</strong>&nbsp;: le risque est probabiliste&nbsp;; il produit des faux positifs (un VPN légitime = « IP anonyme »&nbsp;; un vendeur qui voyage = « voyage impossible »). Ne construis pas une réponse <em>automatique destructrice</em> sur le seul risque sans garde-fou. <strong>Deux</strong>&nbsp;: sa richesse dépend de la <em>licence</em> (les détections avancées et l'accès complet aux données demandent les niveaux P2). Sur un tenant donné, <strong>vérifie ce qui est réellement disponible avant de bâtir une détection dessus</strong> — sinon tu écris une règle sur une source qui, ici, n'existe pas. C'est le même réflexe qu'au chapitre 01&nbsp;: constate la donnée, ne la suppose pas.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="enquete2">
+  <h2>9. Enquête déroulée : un jeton volé, du signal à la portée</h2>
+
+  <p>On assemble le chapitre en une investigation réaliste, du même type que celle du chapitre 01 mais côté identité. Chaque étape illustre un réflexe&nbsp;: choisir la bonne table, distinguer authentification et persistance, nommer ce qu'on ne peut pas prouver.</p>
+
+  <div class="note">
+    <span class="lab">Le point de départ</span>
+    Mardi 8h40. Identity Protection remonte un risque « <em>atypical travel</em> » sur <code>marie.dupont@contoso.com</code> — une connexion depuis la France puis une depuis Lagos à 20 minutes d'intervalle. Sévérité moyenne. Tu prends l'incident.
+  </div>
+
+  <h3>Temps 1 — qualifier la connexion suspecte</h3>
+  <p>Réflexe&nbsp;: ne pas se contenter du signal d'Identity Protection, aller lire la connexion elle-même. On regarde les <em>propriétés</em> qui distinguent un voyageur d'un attaquant.</p>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · les connexions interactives de la victime sur 24 h</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1d</span>)
+<span class="k">| where</span> UserPrincipalName <span class="o">=~</span> <span class="s">"marie.dupont@contoso.com"</span>
+<span class="k">| extend</span> pays <span class="o">=</span> <span class="f">tostring</span>(LocationDetails.countryOrRegion),
+         asn  <span class="o">=</span> <span class="f">tostring</span>(<span class="f">parse_json</span>(AutonomousSystemNumber))
+<span class="k">| project</span> TimeGenerated, ResultType, pays, IPAddress, asn, AppDisplayName,
+          AuthenticationRequirement, ClientAppUsed, UserAgent
+<span class="k">| sort by</span> TimeGenerated <span class="k">asc</span></pre>
+  </div>
+  <div class="out">
+    <div class="obar">Résultat (simplifié)</div>
+<pre>08:12  0  France  88.x.x.x    (FAI grand public)   Outlook   MFA     Browser   Mozilla/Firefox…
+08:31  0  <b>Nigeria</b> 20.x.x.x  <b>(ASN Microsoft/hébergeur)</b>  Office365 <b>single</b>  Browser  <b>python-requests/…</b></pre>
+  </div>
+  <p>Trois indices convergent, et aucun n'est concluant seul&nbsp;— ensemble, ils font basculer&nbsp;:</p>
+  <ul class="feat">
+    <li>La seconde connexion vient d'un <strong>ASN d'hébergeur</strong>, pas d'un FAI grand public. Une personne réelle à Lagos sortirait par un opérateur local, pas par un datacenter.</li>
+    <li><strong>Aucun MFA</strong> sur la seconde (<code>singleFactorAuthentication</code>) alors que la première l'exigeait&nbsp;: cohérent avec un <em>jeton</em> réutilisé plutôt qu'une vraie connexion.</li>
+    <li>L'agent utilisateur <code>python-requests</code> n'est pas un navigateur humain&nbsp;: c'est un script.</li>
+  </ul>
+
+  <h3>Temps 2 — chercher là où vit le jeton (pas dans SigninLogs)</h3>
+  <p>La §5 en pratique&nbsp;: si un refresh token a été volé (AiTM probable), son usage est dans la table <em>non interactive</em>.</p>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · l'activité par jeton de la victime — LA table qu'on oublie</span></div>
+<pre><span class="t">AADNonInteractiveUserSignInLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">2d</span>)
+<span class="k">| where</span> UserPrincipalName <span class="o">=~</span> <span class="s">"marie.dupont@contoso.com"</span>
+<span class="k">| extend</span> pays <span class="o">=</span> <span class="f">tostring</span>(parse_json(LocationDetails).countryOrRegion)
+<span class="k">| summarize</span> n <span class="o">=</span> <span class="f">count</span>(), apps <span class="o">=</span> <span class="f">make_set</span>(AppDisplayName), premier <span class="o">=</span> <span class="f">min</span>(TimeGenerated), dernier <span class="o">=</span> <span class="f">max</span>(TimeGenerated)
+        <span class="k">by</span> IPAddress, pays, <span class="f">tostring</span>(IncomingTokenType)
+<span class="k">| sort by</span> dernier <span class="k">desc</span></pre>
+  </div>
+  <div class="expect">
+    <span class="lab">Ce que tu établis</span>
+    <p>Tu vois l'étendue réelle&nbsp;: depuis quand l'IP nigériane rejoue le jeton, quelles applications elle a touchées (Exchange&nbsp;? SharePoint&nbsp;?), et le type de jeton (<code>IncomingTokenType</code>). <strong>C'est ici que se mesure la durée et la surface de la compromission</strong> — et souvent, c'est bien plus long que ce que <code>SigninLogs</code> laissait croire. La connexion « unique » de 8h31 était en réalité le début d'une série d'accès par jeton.</p>
+  </div>
+
+  <h3>Temps 3 — chercher la persistance (a-t-il posé une porte&nbsp;?)</h3>
+  <p>La question qui change la réponse à incident&nbsp;: l'attaquant s'est-il contenté de lire, ou s'est-il <strong>installé</strong>&nbsp;? On interroge <code>AuditLogs</code> autour de la fenêtre de compromission, sur les six opérations de la §6.</p>
+  <div class="code">
+    <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · tout changement d'annuaire initié par la victime depuis la compromission</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">2d</span>)
+<span class="k">| extend</span> acteur <span class="o">=</span> <span class="f">tostring</span>(InitiatedBy.user.userPrincipalName)
+<span class="k">| where</span> acteur <span class="o">=~</span> <span class="s">"marie.dupont@contoso.com"</span>
+<span class="k">| where</span> OperationName <span class="o">has_any</span> (<span class="s">"credential"</span>, <span class="s">"Consent"</span>, <span class="s">"Add member to role"</span>,
+                             <span class="s">"conditional access"</span>, <span class="s">"security info"</span>, <span class="s">"app role"</span>)
+<span class="k">| project</span> TimeGenerated, OperationName, <span class="f">tostring</span>(TargetResources[<span class="k">0</span>].displayName), Result
+<span class="k">| sort by</span> TimeGenerated <span class="k">asc</span></pre>
+  </div>
+  <div class="why">
+    <span class="lab">Les deux issues, et pourquoi elles changent tout</span>
+    <p><strong>Rien dans <code>AuditLogs</code>&nbsp;:</strong> l'attaquant a probablement lu des données (mail, fichiers) sans s'installer. La réponse est « classique »&nbsp;: révoquer les sessions (avec CAE), réinitialiser le mot de passe, forcer un ré-enrôlement MFA, évaluer les données exposées. <strong>Un ajout de credential, un consentement, un enrôlement MFA&nbsp;:</strong> la compromission a une <em>tête de pont persistante</em>. Réinitialiser le mot de passe <strong>ne suffit plus</strong> — il faut trouver et révoquer l'artefact posé, sans quoi l'attaquant revient demain par un chemin qui n'a rien à voir avec le compte de Marie. C'est la différence entre un incident clos et un incident qu'on croit clos.</p>
+  </div>
+
+  <h3>Temps 4 — la portée, et ce qu'on ne peut pas savoir</h3>
+  <p>Comme au chapitre 01, la question métier finale est « qu'a-t-il vu&nbsp;? », et la réponse dépend de la journalisation en place. Les accès au mail se lisent dans la télémétrie Microsoft 365 (audit unifié, <code>OfficeActivity</code> / Defender), objet du chapitre 08. Si cet audit n'est pas collecté vers ton workspace&nbsp;:</p>
+  <div class="pitfall">
+    <span class="lab">La même honnêteté qu'au chapitre 01</span>
+    <p>« Le compte a été compromis pendant N heures&nbsp;; le jeton a été rejoué depuis une IP d'hébergeur&nbsp;; l'attaquant a accédé à Exchange Online. <strong>Les journaux d'accès au contenu des boîtes n'étaient pas exportés vers notre SIEM&nbsp;; nous ne pouvons pas énumérer précisément les messages lus.</strong> » Écrire « pas d'exfiltration » alors que la télémétrie de contenu manque est la même faute qu'au chapitre précédent&nbsp;: « je n'ai pas vu » n'est pas « il n'y a rien eu ». La distinction est ta responsabilité professionnelle.</p>
+  </div>
+  <div class="expect">
+    <span class="lab">La méthode d'enquête d'identité, en cinq temps</span>
+    <p><strong>1.</strong> Ne jamais s'arrêter au signal&nbsp;: aller lire les <em>propriétés</em> de la connexion (ASN, MFA, agent). <strong>2.</strong> Chercher le jeton dans la table <em>non interactive</em>, pas seulement dans <code>SigninLogs</code>. <strong>3.</strong> Vérifier <code>AuditLogs</code> pour la persistance — c'est ce qui décide de la réponse. <strong>4.</strong> Mesurer la portée avec la télémétrie de contenu (M365), si elle existe. <strong>5.</strong> Nommer explicitement les angles morts. Tu vas exécuter une version de cette séquence dans le lab.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="lab2">
+  <h2>Lab guidé — « L'identité, de l'action à la trace »</h2>
+  <p>Le sélecteur de chaque étape choisit entre portail et Azure CLI, indépendamment des autres étapes. Conserve les noms du workspace, son RG, l'ID de tenant et les IDs d'application/SP : un objet créé en GUI peut être repris en CLI avec son identifiant.</p>
+
+  <p>Tu vas créer une identité applicative, lui donner une permission Graph, la doter d'un credential, simuler un password spray sur des comptes de test, écrire des politiques de Conditional Access en <em>report-only</em>, puis retrouver chacun de ces gestes dans les tables Entra — et produire ta propre « revue de posture d'identité ».</p>
+
+  <div class="labhead">
+    <span class="lab">Lab 02</span>
+    <h3>L'identité, de l'action à la trace</h3>
+    <p style="margin:0;color:#dbe4f3">Sur un <strong>tenant de test</strong> — jamais un tenant de production. Idéal&nbsp;: le tenant de test que tu peux obtenir chez TTE, ou un tenant d'essai Microsoft 365 dédié.</p>
+    <div class="grid">
+      <div><span class="k2">Durée</span><span class="v2">≈ 4 h</span></div>
+      <div><span class="k2">Coût</span><span class="v2">Selon licences, essai et ingestion Log Analytics</span></div>
+      <div><span class="k2">Droits nécessaires</span><span class="v2">Global Administrator sur le tenant de test</span></div>
+      <div><span class="k2">Prérequis</span><span class="v2">un workspace Log Analytics (ch. 01)</span></div>
+      <div><span class="k2">Licence utile</span><span class="v2">Entra P1/P2 en essai (pour CA & Id. Protection)</span></div>
+      <div><span class="k2">Livrable</span><span class="v2">1 revue de posture + 1 tableau action→trace</span></div>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="lab">Avant de commencer — le point sur l'environnement</span>
+    Il te faut un tenant où tu es <strong>Global Administrator</strong> et que tu peux « salir » sans conséquence. Les conditions d'accès au <em>Microsoft 365 Developer Program</em> ont changé ces dernières années&nbsp;: <strong>vérifie ton éligibilité au moment où tu lis</strong>, sinon rabats-toi sur un tenant d'essai E5 dédié ou le tenant de test TTE. Il faut aussi router les journaux Entra vers un workspace Log Analytics (étape A) — sans quoi tu verras les événements dans le portail mais tu ne pourras pas écrire de KQL dessus.
+  </div>
+
+  <!-- PARTIE A -->
+  <p class="part">Partie A — <b>Router les journaux Entra vers ton workspace</b> · 20 min</p>
+  <div class="step" data-n="A.1" data-lab-methods="ch02-a1" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Créer (ou réutiliser) un workspace, puis brancher les logs Entra</h4>
+    <div class="lab-alternative" data-method="cli"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <p>Connecte-toi en tant qu'administrateur du tenant de lab et sélectionne son abonnement. Réutilise le workspace du chapitre 01 ; adapte RG et LAW s'il a été recréé.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · export des catégories Entra</span></div><pre>export RG="${RG:-rg-secops-lab-ch01}"
+export LAW="${LAW:-law-secops-lab}"
+export LAW_ID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query id -o tsv)
+python3 - &lt;&lt;'PY' &gt; entra-diagnostics.json
+import json, os
+categories = ['AuditLogs', 'SignInLogs', 'NonInteractiveUserSignInLogs',
+              'ServicePrincipalSignInLogs', 'ManagedIdentitySignInLogs',
+              'RiskyUsers', 'UserRiskEvents']
+print(json.dumps({'properties': {'workspaceId': os.environ['LAW_ID'],
+    'logs': [{'category': c, 'enabled': True} for c in categories]}}))
+PY
+az rest --method put \
+  --url "https://management.azure.com/providers/Microsoft.aadiam/diagnosticSettings/entra-vers-law?api-version=2017-04-01-preview" \
+  --body @entra-diagnostics.json
+az rest --method get \
+  --url "https://management.azure.com/providers/Microsoft.aadiam/diagnosticSettings/entra-vers-law?api-version=2017-04-01-preview"</pre></div>
+      <p>Les catégories de risque nécessitent les licences correspondantes ; si l'API les refuse, vérifie les catégories disponibles dans le tenant et adapte la liste. Un 403 est un problème d'autorisation, pas une absence de journaux. Vérifie la réception après génération d'un témoin.</p>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <p>Réutilise le workspace du chapitre 01 si ton tenant de test est le même, ou crée-en un. Le routage des logs Entra se fait au portail&nbsp;:</p>
+    <span class="click">Portail <span class="arrow">›</span> rechercher <b>Microsoft Entra ID</b> <span class="arrow">›</span> menu de gauche, section <em>Surveillance</em> <span class="arrow">›</span> <b>Paramètres de diagnostic</b> <span class="arrow">›</span> <b>+ Ajouter un paramètre de diagnostic</b></span>
+    <div class="form">
+      <div class="fbar">Paramètre de diagnostic Entra</div>
+      <table>
+        <tr><td class="fl">Nom</td><td class="fv">entra-vers-law</td></tr>
+        <tr><td class="fl">Catégories à cocher</td><td class="fv">AuditLogs · SignInLogs · NonInteractiveUserSignInLogs · ServicePrincipalSignInLogs · ManagedIdentitySignInLogs · RiskyUsers · UserRiskEvents</td></tr>
+        <tr><td class="fl">Destination</td><td class="fv">Envoyer à un espace de travail Log Analytics → law-secops-lab</td></tr>
+      </table>
+    </div>
+    <div class="why">
+      <span class="lab">Pourquoi cocher les tables « non interactives » et « service principal »</span>
+      <p>Ce sont exactement les tables de la §5 où vit un jeton volé et où se voit un SP compromis. Beaucoup de tenants n'exportent que <code>SignInLogs</code> et <code>AuditLogs</code> «&nbsp;pour économiser&nbsp;», et se privent ainsi de la moitié de la visibilité identité. En cochant ici les cinq familles de sign-in, tu t'offres la couverture que ce chapitre t'apprend à exploiter.</p>
+    </div>
+    <div class="expect">
+      <span class="lab">Résultat attendu</span>
+      <p>Après 10–15 min, ces tables commencent à se remplir. Vérifie&nbsp;: <code>SigninLogs | take 5</code> dans les Journaux du workspace doit renvoyer tes propres connexions récentes.</p>
+    </div>
+  </div>
+
+  <!-- PARTIE B -->
+  <p class="part">Partie B — <b>Créer l'app, le credential, la permission (la persistance de la §6)</b> · 35 min</p>
+  <div class="step" data-n="B.1" data-lab-methods="ch02-b1" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Enregistrer une application</h4>
+    <div class="lab-alternative" data-method="cli"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · application mono-tenant et son SP</span></div><pre>export APP_ID=$(az ad app create --display-name app-lab-persistance \
+  --sign-in-audience AzureADMyOrg --query appId -o tsv)
+az ad sp create --id "$APP_ID" --output none
+az ad app show --id "$APP_ID" --query '{applicationId:appId,applicationObjectId:id}'
+az ad sp show --id "$APP_ID" --query '{applicationId:appId,servicePrincipalObjectId:id}'</pre></div>
+      <div class="expect"><span class="lab">À conserver</span>Un même applicationId, deux objectId distincts. APP_ID sera réutilisé dans B.2–B.4 ; si tu passes au portail, recherche l'application par cet ID.</div>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <span class="click">Portail <span class="arrow">›</span> <b>Microsoft Entra ID</b> <span class="arrow">›</span> <b>Inscriptions d'applications</b> <span class="arrow">›</span> <b>+ Nouvelle inscription</b></span>
+    <div class="form">
+      <div class="fbar">Nouvelle inscription</div>
+      <table>
+        <tr><td class="fl">Nom</td><td class="fv">app-lab-persistance</td></tr>
+        <tr><td class="fl">Types de comptes pris en charge</td><td class="fv">Comptes de cet annuaire organisationnel uniquement <em>(mono-tenant)</em></td></tr>
+        <tr><td class="fl">URI de redirection</td><td class="fv"><em>laisser vide</em></td></tr>
+      </table>
+    </div>
+    <div class="expect">
+      <span class="lab">Note les deux identifiants</span>
+      <p>La page de l'app affiche <strong>ID d'application (client)</strong> = l'<code>appId</code>, et <strong>ID d'objet</strong>. Va ensuite dans <b>Applications d'entreprise</b> → cherche <code>app-lab-persistance</code> → note son <strong>ID d'objet</strong> à <em>elle</em>&nbsp;: c'est l'<code>objectId</code> du <em>service principal</em>, différent des deux précédents. Tu tiens là, en vrai, la distinction app registration / SP de la §1, et le piège appId/objectId de la §5.</p>
+    </div>
+  </div>
+
+  <div class="step" data-n="B.2" data-lab-methods="ch02-b2" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Ajouter un secret — le geste de persistance</h4>
+    <div class="lab-alternative" data-method="cli"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <p>Renseigne APP_ID avec l'ID d'application noté en B.1. L'option <code>--append</code> ajoute un credential sans supprimer ceux qui existent.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · secret de lab valable sept jours</span></div><pre>export APP_ID="&lt;ID d'application de app-lab-persistance&gt;"
+END_DATE=$(python3 -c 'import datetime; print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ"))')
+az ad app credential reset --id "$APP_ID" --append \
+  --display-name lab --end-date "$END_DATE"
+az ad app credential list --id "$APP_ID" --output table</pre></div>
+      <div class="expect"><span class="lab">Résultat attendu</span>Le résultat de reset contient la valeur du secret une seule fois. Conserve-la pour B.4 ; credential list affiche ses métadonnées, pas sa valeur.</div>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <span class="click">l'app <span class="arrow">›</span> <b>Certificats et secrets</b> <span class="arrow">›</span> <b>+ Nouveau secret client</b> <span class="arrow">›</span> description <b>lab</b>, expiration courte <span class="arrow">›</span> <b>Ajouter</b></span>
+    <div class="pitfall">
+      <span class="lab">Copie la valeur immédiatement</span>
+      <p>La <em>Valeur</em> du secret ne s'affiche qu'une seule fois. Copie-la. Ce geste anodin est <strong>exactement</strong> l'opération de persistance n°1 de la §6&nbsp;: dans quelques minutes, tu vas la retrouver dans <code>AuditLogs</code> sous <code>Add service principal credentials</code>. Garde en tête que ce que tu viens de faire en 2 clics, un attaquant le fait sur une app <em>déjà</em> privilégiée pour se créer une porte durable.</p>
+    </div>
+  </div>
+
+  <div class="step" data-n="B.3" data-lab-methods="ch02-b3" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Accorder une permission Microsoft Graph</h4>
+    <div class="lab-alternative" data-method="cli"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <p>Avec ton administrateur de lab, utilise APP_ID de B.1. Résous l'ID de la permission à partir du service principal Microsoft Graph, puis ajoute et consens la permission applicative.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · User.Read.All en app-only</span></div><pre>export APP_ID="&lt;ID d'application de app-lab-persistance&gt;"
+GRAPH_APP_ID="00000003-0000-0000-c000-000000000000"
+ROLE_ID=$(az ad sp show --id "$GRAPH_APP_ID" \
+  --query "appRoles[?value=='User.Read.All' &amp;&amp; contains(allowedMemberTypes, 'Application')].id | [0]" -o tsv)
+az ad app permission add --id "$APP_ID" --api "$GRAPH_APP_ID" \
+  --api-permissions "$ROLE_ID=Role"
+az ad app permission admin-consent --id "$APP_ID"
+SP_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
+az rest --method get --url "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignments"</pre></div>
+      <div class="expect"><span class="lab">Résultat attendu</span>Un app role assignment correspondant à User.Read.All. La déclaration de permission seule n'est pas le consentement ; vérifie les deux étapes.</div>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <span class="click">l'app <span class="arrow">›</span> <b>Autorisations d'API</b> <span class="arrow">›</span> <b>+ Ajouter une autorisation</b> <span class="arrow">›</span> <b>Microsoft Graph</b> <span class="arrow">›</span> <b>Autorisations d'application</b> <span class="arrow">›</span> chercher <b>User.Read.All</b> <span class="arrow">›</span> Ajouter <span class="arrow">›</span> puis <b>Accorder un consentement administrateur</b></span>
+    <div class="why">
+      <span class="lab">Pourquoi <code>User.Read.All</code> applicative, et pas une permission plus dangereuse</span>
+      <p>On choisit une permission <em>lisible</em> mais non destructrice pour le lab. En applicatif, elle permet de lire le profil de <strong>tous</strong> les utilisateurs du tenant sans utilisateur connecté — assez pour illustrer la portée « app-only » de la §1 sans risque. Le clic <strong>Accorder un consentement administrateur</strong> est lui-même une opération journalisée&nbsp;: tu la retrouveras aussi. En production, c'est <code>Mail.Read</code> ou <code>Directory.ReadWrite.All</code> qu'un attaquant viserait&nbsp;; le mécanisme que tu observes est identique.</p>
+    </div>
+  </div>
+
+  <div class="step" data-n="B.4" data-lab-methods="ch02-b4" data-default-method="cli">
+    <h4>Prouver que l'app agit seule (flux app-only)</h4>
+    <div class="lab-alternative" data-method="gui" data-label="Portail Entra (vérification)"><h5 class="lab-method-caption">Portail Entra — vérification</h5>
+      <p><strong>Le portail n'exécute pas une connexion interactive en tant que SP.</strong> La preuve app-only de cette étape nécessite l'appel du volet CLI ou une application de test équivalente. Ouvrir Utilisateurs avec ton compte humain ne prouverait pas la même chose.</p>
+      <span class="click">Entra ID › <b>Surveillance et intégrité › Journaux de connexion</b> › <b>Connexions de principal de service</b></span>
+      <ol><li>Après l'exécution app-only, filtre sur l'ID de <code>app-lab-persistance</code> et sur la période de test.</li><li>Ouvre la connexion ; relève service principal, ressource Microsoft Graph, IP, heure et résultat.</li><li>Compare avec les connexions interactives utilisateurs : la preuve doit être portée par le SP.</li></ol>
+    </div><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+    <p>Dans Cloud Shell, authentifie-toi <em>en tant que l'app</em> et lis l'annuaire — sans aucun utilisateur, sans MFA&nbsp;:</p>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">Bash · le flux client credentials, celui qu'utilise un attaquant persistant</span></div>
+<pre>az login --service-principal \
+  -u <span class="s">"&lt;appId de app-lab-persistance&gt;"</span> \
+  -p <span class="s">"&lt;la valeur du secret&gt;"</span> \
+  --tenant <span class="s">"&lt;ton tenant&gt;"</span> --allow-no-subscriptions -o none
+
+<span class="c"># l'app lit l'annuaire toute seule — aucun humain dans la boucle</span>
+az rest --method GET --url <span class="s">"https://graph.microsoft.com/v1.0/users?\$top=3&\$select=displayName,userPrincipalName"</span></pre>
+    </div>
+    <div class="expect">
+      <span class="lab">Ce que ça démontre</span>
+      <p>Tu obtiens la liste d'utilisateurs alors qu'<strong>aucun humain ne s'est connecté et qu'aucun MFA n'est intervenu</strong>. C'est toute la §6 en une commande&nbsp;: une identité applicative avec un secret et une permission agit seule, hors de portée des protections centrées sur l'humain. Reviens en tant que toi&nbsp;: <code>az logout</code> puis <code>az login</code>.</p>
+    </div>
+  </div>
+
+  <!-- PARTIE C -->
+  <p class="part">Partie C — <b>Conditional Access en report-only, et un password spray</b> · 40 min</p>
+  <div class="step" data-n="C.1" data-lab-methods="ch02-c1" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Écrire trois politiques CA en report-only</h4>
+    <div class="lab-alternative" data-method="cli"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <p>Cette méthode utilise Microsoft Graph via <code>az rest</code>, avec un compte de lab autorisé à gérer Conditional Access et les licences requises. Les trois politiques restent en <strong>report-only</strong>. L'emplacement de démonstration utilise le code pays US, à adapter à ton exercice.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · emplacement nommé et politiques de lab</span></div><pre>export ADMIN_ID=$(az ad signed-in-user show --query id -o tsv)
+export LOCATION_ID=$(az rest --method post \
+  --url "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations" \
+  --body '{"@odata.type":"#microsoft.graph.countryNamedLocation","displayName":"LAB-Pays","countriesAndRegions":["US"],"includeUnknownCountriesAndRegions":false}' \
+  --query id -o tsv)
+python3 - &lt;&lt;'PY'
+import json, os
+for name, controls, clients, locations in [
+    ('legacy', ['block'], ['exchangeActiveSync', 'other'], None),
+    ('mfa', ['mfa'], ['all'], None),
+    ('pays', ['block'], ['all'], {'includeLocations': [os.environ['LOCATION_ID']]})]:
+    conditions = {'users': {'includeUsers': ['All'], 'excludeUsers': [os.environ['ADMIN_ID']]},
+                  'applications': {'includeApplications': ['All']}, 'clientAppTypes': clients}
+    if locations:
+        conditions['locations'] = locations
+    policy = {'displayName': 'LAB-CA-'+name, 'state': 'enabledForReportingButNotEnforced',
+              'conditions': conditions, 'grantControls': {'operator': 'OR', 'builtInControls': controls}}
+    with open('ca-'+name+'.json', 'w') as f:
+        json.dump(policy, f)
+PY
+for file in ca-legacy.json ca-mfa.json ca-pays.json; do
+  az rest --method post \
+    --url "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies" \
+    --body "@$file" --query '{id:id,name:displayName,state:state}'
+done</pre></div>
+      <p>Conserve les trois IDs et LOCATION_ID pour le nettoyage. Un POST supplémentaire crée un nouvel objet : consulte les objets existants avant de rejouer toute la création.</p>
+      <div class="expect"><span class="lab">Résultat attendu</span>Trois politiques enabledForReportingButNotEnforced, avec ton administrateur exclu et les contrôles attendus. C.2 vérifie leur évaluation réelle.</div>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <p><strong>Report-only</strong> = évalué et journalisé, mais rien n'est appliqué&nbsp;: parfait pour un lab, aucun risque de te verrouiller dehors. Crée-les&nbsp;:</p>
+    <span class="click">Portail <span class="arrow">›</span> <b>Microsoft Entra ID</b> <span class="arrow">›</span> <b>Protection</b> <span class="arrow">›</span> <b>Accès conditionnel</b> <span class="arrow">›</span> <b>+ Nouvelle stratégie</b></span>
+    <div class="form">
+      <div class="fbar">Trois politiques à créer (toutes en « Activer la stratégie : Report-only »)</div>
+      <table>
+        <tr><td class="fl">Politique 1 — bloquer l'auth héritée</td><td class="fv">Utilisateurs : tous (exclure ton compte admin) · Applications : toutes · Conditions → Applications clientes : cocher les clients d'<em>authentification héritée</em> · Octroi : Bloquer</td></tr>
+        <tr><td class="fl">Politique 2 — exiger le MFA</td><td class="fv">Utilisateurs : tous (exclure ton admin) · Applications : toutes · Octroi : Accorder → Exiger l'authentification multifacteur</td></tr>
+        <tr><td class="fl">Politique 3 — bloquer un pays</td><td class="fv">Conditions → Emplacements : un pays nommé (créer un emplacement) · Octroi : Bloquer</td></tr>
+      </table>
+    </div>
+    <div class="pitfall">
+      <span class="lab">L'exclusion de ton compte admin n'est pas optionnelle</span>
+      <p>Même en report-only, prends l'habitude d'<strong>exclure systématiquement un compte d'accès d'urgence</strong> (<em>break-glass</em>) de toute politique de blocage. En production, une politique CA mal ciblée qui se verrouille sur son auteur est un incident réel et fréquent. Le réflexe « toujours un compte break-glass exclu » se prend ici, dans le bac à sable, pas le jour où tu écris une vraie politique.</p>
+    </div>
+  </div>
+
+  <div class="step" data-n="C.2" data-lab-methods="ch02-c2" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Générer des connexions, puis lire l'évaluation CA</h4>
+    <div class="lab-alternative" data-method="cli" data-query-cli data-query-timespan="PT1H"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <p>Génère une connexion avec un <strong>utilisateur de test non exclu</strong> des politiques. La connexion reste une action utilisateur ; ce volet choisit la façon d'interroger son évaluation.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · workspace recevant les logs Entra</span></div><pre>export RG="${RG:-rg-secops-lab-ch01}"
+export LAW="${LAW:-law-secops-lab}"
+export LAW_GUID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query customerId -o tsv)
+az extension add --name log-analytics</pre></div>
+      <div class="query-cli-fallback"><p>Copie le KQL du mode portail dans lab-query.kql puis lance <code>az monitor log-analytics query --workspace "$LAW_GUID" --analytics-query "$(cat lab-query.kql)" --timespan PT1H -o json</code>.</p></div><div data-query-cli-output></div>
+      <p>Examine le verdict de chaque politique et explique un cas non appliqué. Une politique report-only évalue sans imposer son contrôle.</p>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <span class="click">Entra ID › <b>Journaux de connexion</b> › connexion de test › onglet <b>Accès conditionnel / Report-only</b></span><p>Lis les politiques et leurs résultats dans cette fiche. Pour la vue KQL, ouvre <strong>Log Analytics › workspace du lab › Journaux</strong> et exécute la requête ci-dessous. Utilise un utilisateur non exclu des politiques.</p>
+    <p>Connecte-toi et déconnecte-toi quelques fois (navigation privée, autre appareil), pour produire des sign-ins. Puis, dans les Journaux&nbsp;:</p>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · lire quelles politiques se sont appliquées (ou non) à tes connexions</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1h</span>)
+<span class="k">| mv-expand</span> ca <span class="o">=</span> ConditionalAccessPolicies
+<span class="k">| extend</span> politique <span class="o">=</span> <span class="f">tostring</span>(ca.displayName), verdict <span class="o">=</span> <span class="f">tostring</span>(ca.result)
+<span class="k">| project</span> TimeGenerated, UserPrincipalName, AppDisplayName, politique, verdict
+<span class="k">| sort by</span> TimeGenerated <span class="k">desc</span></pre>
+    </div>
+    <div class="expect">
+      <span class="lab">Ce que tu observes, et l'exercice de lecture</span>
+      <p>Chaque connexion liste tes trois politiques avec un verdict&nbsp;: <code>reportOnlySuccess</code>, <code>reportOnlyFailure</code> ou <code>notApplied</code>. <strong>Repère les <code>notApplied</code></strong> et demande-toi pourquoi la condition n'a pas matché (mauvaise app&nbsp;? pas le bon type de client&nbsp;?). C'est très exactement la compétence de la §4&nbsp;: comprendre <em>pourquoi</em> une protection ne s'est pas déclenchée. Note un cas de <code>notApplied</code> dans ton livrable et son explication.</p>
+    </div>
+  </div>
+
+  <div class="step" data-n="C.3" data-lab-methods="ch02-c3" data-original-method="gui" data-original-label="Portail Entra (GUI)">
+    <h4>Simuler un password spray sur des comptes de test</h4>
+    <div class="lab-alternative" data-method="cli" data-label="Azure CLI (analyse)" data-query-cli data-query-timespan="PT1H"><h5 class="lab-method-caption">Azure CLI — analyse</h5>
+      <p>Les quelques échecs de connexion sont générés manuellement sur tes comptes jetables comme décrit dans le volet portail. Ce volet analyse les traces via CLI ; il ne transforme pas la création d'échecs en une boucle automatisée de mots de passe.</p>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · workspace cible</span></div><pre>export RG="${RG:-rg-secops-lab-ch01}"
+export LAW="${LAW:-law-secops-lab}"
+export LAW_GUID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query customerId -o tsv)
+az extension add --name log-analytics</pre></div>
+      <div class="query-cli-fallback"><p>Enregistre le KQL dans lab-query.kql puis lance <code>az monitor log-analytics query --workspace "$LAW_GUID" --analytics-query "$(cat lab-query.kql)" --timespan PT1H -o json</code>.</p></div><div data-query-cli-output></div><p>Retrouve ton IP et les comptes de test, puis examine les codes de résultat au lieu de présumer que tous les échecs sont dus au mot de passe.</p>
+    </div><h5 class="lab-method-caption">Portail Entra (GUI)</h5>
+    <span class="click">Entra ID › <b>Utilisateurs</b> pour les comptes jetables, puis <b>Journaux de connexion</b> pour leurs tentatives</span>
+    <p>Crée deux ou trois utilisateurs de test jetables (<code>test1@…</code>, <code>test2@…</code>), puis lance de <em>mauvaises</em> tentatives de connexion contre eux — depuis une fenêtre de navigation privée, à la main, ou avec un petit script qui tente un mot de passe évident. <strong>N'utilise que tes propres comptes de test.</strong></p>
+    <div class="why">
+      <span class="lab">Pourquoi « à la main » suffit et pourquoi rester sur tes comptes</span>
+      <p>L'objectif n'est pas de réussir l'attaque&nbsp;: c'est de <strong>produire le motif</strong> — plusieurs comptes visés, échecs <code>50126</code>, depuis une même origine. Cinq ou six tentatives manuelles suffisent à faire apparaître la forme dans les logs. Rester strictement sur des comptes de test que tu possèdes est une règle absolue&nbsp;: rejouer un spray sur de vrais comptes, même « pour tester », est à la fois inutile et hors cadre.</p>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · faire apparaître ton spray (la requête de la §5, sur tes données)</span></div>
+<pre><span class="t">SigninLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">1h</span>)
+<span class="k">| summarize</span> comptes <span class="o">=</span> <span class="f">dcount</span>(UserPrincipalName),
+            echecs  <span class="o">=</span> <span class="f">countif</span>(ResultType <span class="o">==</span> <span class="s">"50126"</span>),
+            codes   <span class="o">=</span> <span class="f">make_set</span>(ResultType)
+        <span class="k">by</span> IPAddress
+<span class="k">| sort by</span> echecs <span class="k">desc</span></pre>
+    </div>
+    <div class="expect">
+      <span class="lab">Résultat attendu</span>
+      <p>Ton IP en tête, avec plusieurs comptes visés et une série de <code>50126</code>. <strong>Compare l'ensemble des codes obtenus avec le tableau de la §5</strong>&nbsp;: reconnais-tu un <code>50053</code> (verrouillage) si tu as insisté&nbsp;? Un <code>50126</code> partout&nbsp;? Cette lecture des codes est une compétence que peu d'analystes possèdent vraiment.</p>
+    </div>
+  </div>
+
+  <!-- PARTIE D -->
+  <p class="part">Partie D — <b>Retrouver chaque geste dans AuditLogs</b> · 30 min</p>
+  <div class="step" data-n="D.1" data-lab-methods="ch02-d1" data-original-method="gui" data-original-label="Portail Azure / Entra (GUI)">
+    <h4>Le tableau action → trace de l'identité</h4>
+    <div class="lab-alternative" data-method="cli" data-query-cli data-query-timespan="PT3H"><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+      <div class="code"><div class="bar"><span class="ttl">Azure CLI · préparer le workspace</span></div><pre>export RG="${RG:-rg-secops-lab-ch01}"
+export LAW="${LAW:-law-secops-lab}"
+export LAW_GUID=$(az monitor log-analytics workspace show -g "$RG" -n "$LAW" --query customerId -o tsv)
+az extension add --name log-analytics</pre></div>
+      <div class="query-cli-fallback"><p>Enregistre chaque KQL du volet portail dans un fichier distinct, puis lance <code>az monitor log-analytics query --workspace "$LAW_GUID" --analytics-query "$(cat lab-query.kql)" --timespan PT3H -o json</code>.</p></div><div data-query-cli-output></div>
+      <div class="expect"><span class="lab">Livrable</span>Pour chaque geste : table, résultat, horodatage, identité et limite de preuve. Complète les trois recherches avec les résultats CA et échecs de connexion de C.2–C.3.</div>
+    </div><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+    <span class="click">Entra ID › <b>Journaux d'audit</b> pour secret/consentement ; <b>Journaux de connexion › Principaux de service</b> pour l'app-only</span><p>Filtre sur l'application et la période de test, ouvre les lignes et copie leurs IDs. Dans <strong>Log Analytics › workspace du lab › Journaux</strong>, exécute les trois requêtes suivantes séparément pour vérifier aussi l'export.</p>
+    <p>Laisse passer la latence, puis retrouve chacun de tes gestes. Remplis ce tableau au fur et à mesure — c'est ton livrable.</p>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · l'ajout du secret (persistance)</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">3h</span>)
+<span class="k">| where</span> OperationName <span class="o">in~</span> (<span class="s">"Add service principal credentials"</span>, <span class="s">"Update application - Certificates and secrets management"</span>)
+<span class="k">| extend</span> acteur <span class="o">=</span> <span class="f">tostring</span>(InitiatedBy.user.userPrincipalName), cible <span class="o">=</span> <span class="f">tostring</span>(TargetResources[<span class="k">0</span>].displayName)
+<span class="k">| project</span> TimeGenerated, acteur, OperationName, cible, Result</pre>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · le consentement admin à la permission Graph</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">3h</span>)
+<span class="k">| where</span> OperationName <span class="o">has_any</span> (<span class="s">"Consent"</span>, <span class="s">"Add app role assignment"</span>, <span class="s">"Add delegated permission grant"</span>)
+<span class="k">| project</span> TimeGenerated, OperationName, <span class="f">tostring</span>(TargetResources[<span class="k">0</span>].displayName), Result</pre>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">KQL · la connexion app-only de la partie B.4 (le SP agissant seul)</span></div>
+<pre><span class="t">AADServicePrincipalSignInLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">3h</span>)
+<span class="k">| where</span> ServicePrincipalName <span class="o">=~</span> <span class="s">"app-lab-persistance"</span>
+<span class="k">| project</span> TimeGenerated, ServicePrincipalName, IPAddress, ResultType, ResourceDisplayName</pre>
+    </div>
+    <div class="expect">
+      <span class="lab">Le livrable</span>
+      <p>Un tableau à cinq lignes&nbsp;: <em>ajout de secret</em>, <em>consentement Graph</em>, <em>connexion app-only</em>, <em>évaluation CA report-only</em>, <em>password spray</em>. Pour chacune&nbsp;: la table, la requête, ce que la trace prouve, ce qu'elle ne prouve pas. <strong>Remarque en particulier</strong>&nbsp;: la connexion app-only apparaît dans <code>AADServicePrincipalSignInLogs</code> et <em>pas</em> dans <code>SigninLogs</code> — la démonstration en direct du piège de la §5.</p>
+    </div>
+  </div>
+
+  <!-- PARTIE E -->
+  <p class="part">Partie E — <b>Produire une revue de posture d'identité</b> · 25 min</p>
+  <div class="step" data-n="E.1" data-lab-methods="ch02-e1">
+    <h4>Les requêtes d'audit de la §6, sur ton tenant</h4>
+    <div class="lab-alternative" data-method="gui" data-label="Portail Azure / Entra (GUI)"><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+      <ol><li><strong>Inscriptions d'applications</strong> : pour l'application étudiée, examine propriétaires, certificats/secrets et dates de création/expiration.</li><li><strong>Applications d'entreprise › application › Autorisations</strong> : relève les permissions accordées et distingue consentement utilisateur et administrateur. Compare aux autorisations déclarées dans l'inscription.</li><li><strong>Rôles et administrateurs</strong>, puis <strong>Privileged Identity Management › Rôles Microsoft Entra › Attributions</strong> : relève rôles actifs et éligibles ; examine les groupes pertinents.</li><li><strong>Accès conditionnel</strong> : vérifie état, portée, exclusions et dernières modifications des politiques de lab.</li><li><strong>Journaux d'audit</strong> : filtre sur la période et les objets concernés pour retrouver ajouts de credentials, consentements et changements de rôles.</li></ol>
+      <div class="expect"><span class="lab">Livrable</span>Pour chaque point : état observé, preuve datée, limite et recommandation. Un historique d'ajouts de rôles ne remplace pas l'inventaire des attributions actuelles.</div>
+    </div><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+    <p>Enfile les cinq vérifications de l'approfondissement §6 et consigne les résultats. Ces requêtes sont ta prestation d'audit&nbsp;:</p>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">Bash · inventorier les permissions applicatives dangereuses (via Graph)</span></div>
+<pre><span class="c"># les service principals ayant des permissions APPLICATIVES à fort impact</span>
+az rest --method GET --url <span class="s">"https://graph.microsoft.com/v1.0/servicePrincipals?\$select=displayName,appId,id&\$top=999"</span> \
+  --query <span class="s">"value[].{nom:displayName, id:id}"</span> -o table
+<span class="c"># puis, pour un SP suspect, lister ses app role assignments (permissions app-only accordées) :</span>
+<span class="c"># az rest --url "https://graph.microsoft.com/v1.0/servicePrincipals/&lt;id&gt;/appRoleAssignments"</span></pre>
+    </div>
+    <div class="code">
+      <div class="bar"><span class="ttl">KQL · historique des ajouts de rôles, pas inventaire des droits actuels</span></div>
+<pre><span class="t">AuditLogs</span>
+<span class="k">| where</span> TimeGenerated <span class="o">&gt;</span> <span class="f">ago</span>(<span class="k">90d</span>)
+<span class="k">| where</span> OperationName <span class="o">==</span> <span class="s">"Add member to role"</span>
+| mv-expand Target=TargetResources
+| mv-expand Property=Target.modifiedProperties
+| where tostring(Property.displayName) == "Role.DisplayName"
+| project TimeGenerated, Actor=tostring(InitiatedBy.user.userPrincipalName), Role=tostring(Property.newValue)
+<span class="k">| sort by</span> TimeGenerated <span class="k">desc</span></pre>
+    </div>
+    <div class="expect">
+      <span class="lab">Le second livrable</span>
+      <p>Une page&nbsp;: « Revue de posture d'identité de &lt;tenant&gt; » avec, pour chacun des cinq points de la §6, ce que tu as trouvé et ce que tu recommanderais. C'est le document qu'un MSSP facture&nbsp;; le produire ici, sur un vrai tenant, est l'exercice le plus proche du métier de tout le chapitre.</p>
+    </div>
+  </div>
+
+  <!-- PARTIE F -->
+  <p class="part">Partie F — <b>Nettoyage</b> · 10 min</p>
+  <div class="step" data-n="F.1" data-lab-methods="ch02-f1">
+    <h4>Défaire ce qui est sensible</h4>
+    <div class="lab-alternative" data-method="gui" data-label="Portail Azure / Entra (GUI)"><h5 class="lab-method-caption">Portail Azure / Entra (GUI)</h5>
+      <ol><li>Dans <strong>Inscriptions d'applications › app-lab-persistance</strong>, vérifie l'ID noté en B.1 puis supprime l'inscription. Vérifie dans <strong>Applications d'entreprise</strong> l'état du SP correspondant et supprime l'objet de lab restant si nécessaire.</li><li>Dans <strong>Utilisateurs</strong>, supprime uniquement les comptes de test créés en C.3, identifiés par leur ID.</li><li>Dans <strong>Accès conditionnel</strong>, désactive ou supprime les trois politiques de lab. Si tu supprimes l'emplacement nommé créé pour le pays, retire d'abord ses références dans les politiques.</li><li>Vérifie les listes actives et conserve les preuves d'audit nécessaires à la restitution.</li></ol>
+    </div><h5 class="lab-method-caption">Azure CLI / Cloud Shell</h5>
+    <div class="code">
+      <div class="bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="ttl">Bash · supprimer l'app (donc son secret) et les comptes de test</span></div>
+<pre>az ad app delete --id <span class="s">"&lt;appId de app-lab-persistance&gt;"</span>
+# Répéter pour chacun des comptes jetables créés en C.3 :
+az ad user delete --id "&lt;ID d'objet du compte de test&gt;"
+# Répéter pour chaque politique de lab, avec son ID conservé en C.1 :
+az rest --method patch \
+  --url "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/&lt;ID de politique&gt;" \
+  --body '{"state":"disabled"}'</pre>
+    </div>
+    <div class="pitfall">
+      <span class="lab">Ne laisse jamais traîner un secret applicatif</span>
+      <p>Le secret que tu as créé en B.2 est un vrai identifiant d'accès. Même sur un tenant de test, supprimer l'app (donc le secret) en fin de lab est non négociable&nbsp;— c'est le pendant identité du «&nbsp;supprime le service principal&nbsp;» du chapitre 01. Passe aussi tes trois politiques CA en <em>Désactivé</em> si tu ne les gardes pas, pour ne pas polluer tes futures analyses.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="erreurs2">
+  <h2>Les erreurs qui coûtent une heure (spécial identité)</h2>
+  <div class="trouble">
+    <div class="tbar">Catalogue des pièges du chapitre</div>
+    <table>
+      <tr><td class="sym">Tu cherches un jeton volé dans <code>SigninLogs</code> et conclus « une seule connexion »</td><td>L'usage du refresh token est dans <code>AADNonInteractiveUserSignInLogs</code>. Interroge toujours les deux tables — et <code>AADServicePrincipalSignInLogs</code> si une app est en jeu.</td></tr>
+      <tr><td class="sym">Tu cherches un service principal par son <code>appId</code> et ne trouves rien</td><td>Selon la table et le champ, c'est l'<code>objectId</code> du SP qui apparaît, pas l'<code>appId</code>. Résous d'abord la correspondance, garde les deux sous la main.</td></tr>
+      <tr><td class="sym">Tu conclus « le compte n'était pas admin » sur la seule vue des rôles actifs</td><td>Les rôles PIM <em>éligibles</em> et l'appartenance à des groupes qui confèrent un rôle n'apparaissent pas dans les rôles actifs. Vérifie aussi l'éligibilité et les groupes.</td></tr>
+      <tr><td class="sym">« On a du MFA » traité comme une protection complète contre le vol de jeton</td><td>FIDO2/passkeys, exigences d'appareil, CAE et protection des jetons répondent à des menaces différentes. Vérifie la couverture réelle des clients et ressources plutôt que de supposer que toute session est liée à l'appareil.</td></tr>
+      <tr><td class="sym">Une politique CA en <em>report-only</em> prise pour active</td><td>Report-only journalise mais n'applique rien. Vérifie l'état réel de chaque politique avant de supposer qu'une protection est en place.</td></tr>
+      <tr><td class="sym">Tu réinitialises le mot de passe et déclares l'incident clos</td><td>Si l'attaquant a posé un credential applicatif ou un consentement (§6), le reset ne l'expulse pas. Cherche la persistance dans <code>AuditLogs</code> avant de clôturer.</td></tr>
+      <tr><td class="sym">Tu écris une règle sur un signal Identity Protection absent du tenant</td><td>La richesse d'Identity Protection dépend de la licence (P2). Constate ce qui est réellement disponible avant de bâtir une détection dessus.</td></tr>
+      <tr><td class="sym">Tu ignores un risque « dismissed »</td><td>Un risque rejeté sans justification, ou rejeté en masse par un compte inhabituel, est en soi un événement à revoir — l'attaquant nettoie peut-être ses traces.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="validation2">
+  <h2>Validation — tu peux passer au chapitre 03 si…</h2>
+  <div class="check">
+    <span class="lab">Connaissances — à réciter sans notes</span>
+    <ul>
+      <li>Tu expliques la différence app registration / service principal / identité managée, et pourquoi les non-humains sont le vrai sujet</li>
+      <li>Tu décris access / refresh / PRT et ce qu'implique le vol de chacun, schéma à l'appui</li>
+      <li>Tu expliques AiTM à un N1 en 5 minutes et tu nommes les contre-mesures qui marchent vraiment</li>
+      <li>Tu cites les tables d'authentification et les journaux de ressource nécessaires selon l'usage d'un jeton</li>
+      <li>Tu listes au moins quatre techniques de persistance et l'opération <code>AuditLogs</code> de chacune</li>
+      <li>Tu expliques le principe « AD on-prem compromis = cloud présumé compromis » et le rôle d'Entra Connect</li>
+    </ul>
+  </div>
+  <div class="check">
+    <span class="lab">Compétences pratiques — vérifiées en conditions</span>
+    <ul>
+      <li>Tu lis l'évaluation CA d'un sign-in et tu nommes trois gaps classiques, dont un <code>notApplied</code> expliqué</li>
+      <li>Tu écris la requête qui met en évidence un password spray, et tu décodes les <code>ResultType</code> associés</li>
+      <li>Tu retrouves un ajout de credential applicatif dans <code>AuditLogs</code> et tu distingues un geste normal d'un geste suspect</li>
+      <li>Tu mènes une enquête de compromission d'identité en interrogeant les bonnes tables dans le bon ordre</li>
+      <li>Tu produis une revue de posture d'identité couvrant les cinq points de la §6</li>
+    </ul>
+  </div>
+  <div class="check">
+    <span class="lab">Livrables du chapitre</span>
+    <ul>
+      <li>Le tableau <strong>action → trace</strong> à cinq lignes (secret, consentement, connexion app-only, évaluation CA, spray)</li>
+      <li>La <strong>revue de posture d'identité</strong> de ton tenant de test (les cinq vérifications de la §6)</li>
+      <li>Une demi-page&nbsp;: « les 5 persistances Entra que je vérifierais en premier sur un tenant inconnu, et leur trace exacte »</li>
+      <li>Jalon&nbsp;: <strong>SC-900 passé</strong> (ou jugé inutile en connaissance de cause)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="glossaire2">
+  <h2>Glossaire du chapitre</h2>
+  <dl class="gloss">
+    <dt>App registration / service principal</dt>
+    <dd>La définition d'une application (globale, tenant éditeur) vs son instance locale dans ton tenant, porteuse des permissions et des connexions.</dd>
+    <dt>Managed identity</dt>
+    <dd>Un service principal sans secret, lié à une ressource Azure&nbsp;; son jeton s'obtient via l'IMDS (ch. 01).</dd>
+    <dt>Permission déléguée / applicative</dt>
+    <dd>Agir « au nom d'un utilisateur » (portée = intersection des droits) vs agir seule (portée = les droits de l'app, souvent tout le tenant).</dd>
+    <dt>Access / refresh / ID token / PRT</dt>
+    <dd>Laissez-passer court vers une ressource / moyen de renouveler / preuve d'identité OIDC / super-jeton d'appareil Windows joint à Entra.</dd>
+    <dt>OAuth 2.0 / OIDC</dt>
+    <dd>Le protocole d'autorisation (accès à une ressource) et sa couche d'authentification (prouver qui est l'utilisateur).</dd>
+    <dt>CAE — Continuous Access Evaluation</dt>
+    <dd>Propagation quasi temps réel d'événements critiques (révocation, risque)&nbsp;; rend la révocation de session réellement efficace.</dd>
+    <dt>AiTM — Adversary-in-the-Middle</dt>
+    <dd>Proxy de phishing qui capture le cookie de session après un vrai MFA. Contré par le MFA résistant au phishing et l'exigence d'appareil conforme.</dd>
+    <dt>Conditional Access</dt>
+    <dd>Le moteur SI (conditions) ALORS (octroi/session). Le blocage l'emporte&nbsp;; une condition non matchée = pas de contrôle (<code>notApplied</code>).</dd>
+    <dt>Legacy auth</dt>
+    <dd>Méthodes d'authentification héritées, notamment Basic Auth, ne pouvant pas satisfaire un MFA moderne. Distinguer le protocole de sa méthode d'authentification ; certaines implémentations POP/IMAP/SMTP prennent en charge OAuth.</dd>
+    <dt>Persistance applicative</dt>
+    <dd>Credential ajouté à une app, consentement illicite, permission app-only large&nbsp;: survit au reset de mot de passe et au MFA. S'écrit dans <code>AuditLogs</code>.</dd>
+    <dt>Consent phishing</dt>
+    <dd>Faire consentir une victime à une app tierce qui obtient des permissions déléguées (souvent <code>offline_access</code> + <code>Mail.Read</code>) = accès persistant.</dd>
+    <dt>Entra Connect — PHS / PTA / fédération</dt>
+    <dd>Les trois modes d'authentification hybride. Golden SAML (fédération) permet de forger des jetons via le certificat ADFS volé.</dd>
+    <dt>Identity Protection</dt>
+    <dd>Le calcul de risque de connexion et de risque utilisateur par Microsoft. Alimente CA en prévention&nbsp;; source de leads en détection. Dépend de la licence.</dd>
+    <dt>ResultType</dt>
+    <dd>Le code numérique d'un sign-in&nbsp;: 0 = succès, 50126 = mauvais mot de passe, 53003 = bloqué par CA, 500121 = échec MFA… Le langage des échecs.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="refs2">
+  <h2>Pour aller plus loin</h2>
+  <p class="dim">Sur l'identité plus qu'ailleurs, les noms d'opérations et de tables évoluent&nbsp;; constate toujours dans ton propre tenant plutôt que de te fier à un article daté.</p>
+  <ul class="refs">
+    <li><a href="https://learn.microsoft.com/entra/identity/monitoring-health/concept-sign-ins" target="_blank" rel="noopener">Entra — journaux de connexion</a> <span class="src">Microsoft Learn</span> — les types de sign-in (interactif, non interactif, SP, MI) et leurs schémas.</li>
+    <li><a href="https://learn.microsoft.com/entra/identity/conditional-access/overview" target="_blank" rel="noopener">Conditional Access</a> <span class="src">Microsoft Learn</span> — conditions, contrôles d'octroi et de session, report-only.</li>
+    <li><a href="https://learn.microsoft.com/entra/id-protection/overview-identity-protection" target="_blank" rel="noopener">Identity Protection</a> <span class="src">Microsoft Learn</span> — types de risque, détections, intégration à CA.</li>
+    <li><a href="https://learn.microsoft.com/entra/identity-platform/access-tokens" target="_blank" rel="noopener">Plateforme d'identités — access tokens</a> <span class="src">Microsoft Learn</span> — structure des JWT, revendications, audiences.</li>
+    <li><a href="https://learn.microsoft.com/entra/identity/enterprise-apps/manage-consent-requests" target="_blank" rel="noopener">Consentement aux applications</a> <span class="src">Microsoft Learn</span> — consentement utilisateur vs admin, consent phishing.</li>
+    <li><a href="https://learn.microsoft.com/entra/identity/hybrid/connect/whatis-phs" target="_blank" rel="noopener">Entra Connect — authentification hybride</a> <span class="src">Microsoft Learn</span> — PHS, PTA, fédération et leurs implications.</li>
+    <li><a href="https://attack.mitre.org/matrices/enterprise/cloud/" target="_blank" rel="noopener">MITRE ATT&amp;CK — matrices cloud &amp; identité</a> <span class="src">MITRE</span> — pour rattacher chaque geste (T1078, T1098, T1528…) à une technique nommée.</li>
+    <li><a href="https://learn.microsoft.com/en-us/defender-office-365/responding-to-a-compromised-email-account" target="_blank" rel="noopener">Réponse à une compromission de messagerie</a> <span class="src">Microsoft Learn</span> — la procédure officielle, à confronter à ta méthode de la §9.</li>
+  </ul>
+
+  <div class="note">
+    <span class="lab">Le pont vers le chapitre 03</span>
+    Tu sais lire les ressources (ch. 01) et l'identité (ch. 02) — les deux grandes sources d'un SOC Azure. À partir du mois 2, on change de posture&nbsp;: de <em>consommateur</em> de journaux, tu deviens <em>architecte</em> du SIEM. Le chapitre 03 attaque l'architecture de Microsoft Sentinel en profondeur&nbsp;: ingestion, plans de tables, coût, multi-tenant MSSP (où tu retrouveras Lighthouse du chapitre 01) — comment concevoir la collecte que, jusqu'ici, tu ne faisais qu'exploiter.
+  </div>
+</section>
+
+<div class="pager">
+  <a href="ch01-azure-plans-journaux.html">
+    <span class="dir">← Chapitre 01</span>
+    <span class="ttl2">Azure pour la sécurité : plans, journaux, gouvernance</span>
+  </a>
+  <a href="ch03-sentinel-architecture.html">
+    <span class="dir">Chapitre 03 →</span>
+    <span class="ttl2">Architecture Sentinel & MSSP</span>
+  </a>
+</div>
+
+<footer>
+  <p class="dim" style="margin-bottom:6px">Chapitre 02 · Semaines 3–4 · Mois 1 — Socle plateforme.</p>
+  <p style="margin:0 0 14px;color:var(--faint)">Format « cours » — théorie approfondie, schémas, lab guidé au clic. État de la plateforme au 31 août 2026&nbsp;: opérations, tables et chemins de portail évoluent, vérifie toujours dans ton propre tenant.</p>
+</footer>
+
+</main>
+</div>
+</div>
+
+<script src="../assets/cours.js"></script>
+</body>
+</html>
