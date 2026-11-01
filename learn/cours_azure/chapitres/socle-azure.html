@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Socle — Comment fonctionne Azure</title><link rel="stylesheet" href="../assets/cours.css"><link rel="stylesheet" href="../assets/cours-lab.css"><script src="../assets/cours.js" defer></script></head>
 <body><div id="progress"></div><div class="wrap"><div class="shell">
-<nav class="toc" aria-label="Sommaire du socle"><p class="toc-h">Socle Azure</p><a href="../index.html">← Retour à l’accueil</a><a href="#modele">1. Le modèle de ressources</a><a href="#plans">2. Deux plans, deux journaux</a><a href="#identite">3. Entra ID et Azure RBAC</a><a href="#jetons">4. Jetons et authentification</a><a href="#managees">5. Identités managées</a><a href="#lab">Lab guidé</a><a href="#validation">Validation et corrigés</a><a href="#refs">Références</a></nav>
+<nav class="toc" aria-label="Sommaire du socle"><p class="toc-h">Socle Azure</p><a href="../index.html">← Retour à l’accueil</a><a href="#modele">1. Le modèle de ressources</a><a href="#plans">2. Deux plans, deux journaux</a><a href="#identite">3. Entra ID et Azure RBAC</a><a href="#jetons">4. Jetons et authentification</a><a href="#managees">5. Identités managées</a><a href="#lexique">6. Lexique</a><a href="#lab">Lab guidé</a><a href="#validation">Validation et corrigés</a><a href="#refs">Références</a></nav>
 <main><div class="crumb"><a href="../index.html">Cours Azure SecOps</a><span class="sep">/</span>Prérequis · Socle</div>
 <header class="chead"><div class="kicker">À lire avant le chapitre 01 · ~8 h</div><h1>Socle Azure :<br>comprendre le modèle avant de le défendre</h1><p class="lead">Avant de collecter un journal ou d'écrire une détection, il faut savoir qui agit, sur quoi, et par quel plan. Ce socle décrit la hiérarchie des ressources, la séparation control plane / data plane, la différence entre Entra ID et Azure RBAC, et le rôle central des jetons. Chaque notion est rattachée à la trace qu'elle laisse, car c'est cette trace que le reste du cours exploite.</p><div class="factbar"><span>Théorie : <b>5 h</b></span><span>Lab : <b>2 h</b></span><span>Restitution : <b>1 h</b></span></div></header>
 
@@ -36,6 +36,94 @@
 <p>Le mécanisme : depuis l'intérieur de la ressource, le code appelle l'<b>IMDS</b> (Instance Metadata Service, une adresse de lien local non routable) pour recevoir un access token correspondant à l'identité managée, pour l'audience demandée. Les droits de ce jeton sont exactement les attributions Azure RBAC de l'identité managée. Une identité managée « Contributor » sur un resource group donne donc à qui exécute du code dans la ressource les mêmes droits — sans jamais manipuler de mot de passe.</p>
 <div class="note"><span class="lab">Lien avec la suite</span>Deux types : <b>system-assigned</b> (liée au cycle de vie d'une ressource) et <b>user-assigned</b> (autonome, attachable à plusieurs ressources). La partie pentest du cours montre comment un accès à la ressource se transforme en jeton d'identité managée, et le socle explique pourquoi : le jeton suit les droits RBAC, pas l'utilisateur humain.</div>
 <p>Principe de moindre privilège appliqué : une identité managée ne doit porter que le scope et le rôle strictement nécessaires. Un « Contributor » à l'échelle de la subscription posé par confort sur une petite fonction est une dette de sécurité majeure, car il définit le rayon d'un pivot éventuel.</p></section>
+
+<section id="lexique"><h2>6. Lexique : acronymes et produits à connaître</h2><p>Ce lexique regroupe les termes qui reviennent dans tout le cours, classés par thème. Reviens-y dès qu'un sigle te bloque : chaque chapitre approfondit ensuite ceux qui le concernent.</p>
+<h3>Organisation et services Azure</h3>
+<dl class="gloss">
+<dt>ARM — Azure Resource Manager</dt><dd>L'API unique de gestion d'Azure (<code>management.azure.com</code>). Portail, CLI et Bicep passent tous par elle.</dd>
+<dt>Azure Arc</dt><dd>Service qui projette dans Azure des serveurs situés sur site ou dans un autre cloud, pour leur appliquer la même gestion.</dd>
+<dt>Azure Lighthouse</dt><dd>Délégation d'accès aux ressources Azure de plusieurs clients vers un prestataire, sans se connecter à chaque tenant.</dd>
+<dt>Azure Monitor</dt><dd>Plateforme de collecte et d'analyse des métriques et des journaux d'Azure.</dd>
+<dt>Azure Policy</dt><dd>Moteur de règles qui contrôle ou impose la conformité des ressources, par exemple les régions autorisées.</dd>
+<dt>Bicep</dt><dd>Langage de Microsoft pour décrire des ressources Azure sous forme de code. Il se compile en template ARM.</dd>
+<dt>IaaS / PaaS / SaaS</dt><dd>Trois niveaux de service cloud : infrastructure (VM), plateforme (base de données managée) et logiciel prêt à l'emploi (Microsoft 365). Plus le niveau monte, plus le fournisseur assume de responsabilités.</dd>
+<dt>IaC — Infrastructure as Code</dt><dd>Gestion de l'infrastructure par des fichiers versionnés plutôt que par des clics dans le portail.</dd>
+<dt>Key Vault</dt><dd>Coffre Azure pour les secrets, les clés et les certificats.</dd>
+<dt>KQL — Kusto Query Language</dt><dd>Langage de requête utilisé dans Log Analytics, Sentinel et Defender XDR.</dd>
+<dt>Log Analytics workspace</dt><dd>Espace de stockage et d'interrogation des journaux. Sentinel s'active par-dessus.</dd>
+<dt>Management group</dt><dd>Conteneur qui regroupe des subscriptions pour leur appliquer des droits et des policies communs.</dd>
+<dt>NSG — Network Security Group</dt><dd>Ensemble de règles de filtrage réseau appliqué à un sous-réseau ou à une interface.</dd>
+<dt>Resource group</dt><dd>Conteneur logique de ressources qui partagent un même cycle de vie.</dd>
+<dt>Subscription</dt><dd>Unité de facturation et de limite d'accès. Toute ressource appartient à une subscription.</dd>
+<dt>Tenant</dt><dd>Instance Entra ID dédiée à une organisation, qui contient ses identités et ses subscriptions.</dd>
+<dt>VM — Virtual Machine</dt><dd>Machine virtuelle : serveur hébergé en IaaS, dont le client gère le système d'exploitation.</dd>
+<dt>VNet — Virtual Network</dt><dd>Réseau privé isolé dans Azure.</dd>
+</dl>
+<h3>Identité et authentification</h3>
+<dl class="gloss">
+<dt>AD DS — Active Directory Domain Services</dt><dd>Annuaire Windows historique, hébergé sur des contrôleurs de domaine. À ne pas confondre avec Entra ID.</dd>
+<dt>Conditional Access (accès conditionnel)</dt><dd>Règles Entra ID du type « si cette connexion présente tel contexte, alors exiger la MFA ou bloquer ».</dd>
+<dt>Entra Connect</dt><dd>Outil de synchronisation des identités d'AD DS vers Entra ID.</dd>
+<dt>Entra ID</dt><dd>Annuaire d'identité cloud de Microsoft, anciennement Azure AD. Les niveaux P1 et P2 ajoutent notamment l'accès conditionnel et, pour P2, PIM.</dd>
+<dt>GDAP — Granular Delegated Admin Privileges</dt><dd>Droits d'administration délégués, limités et temporaires, qu'un client accorde à un partenaire Microsoft.</dd>
+<dt>Global Administrator</dt><dd>Rôle Entra ID le plus puissant, avec un contrôle étendu sur le tenant.</dd>
+<dt>IMDS — Instance Metadata Service</dt><dd>Service local d'une VM, accessible seulement depuis celle-ci, qui fournit ses métadonnées et ses jetons d'identité managée.</dd>
+<dt>JWT — JSON Web Token</dt><dd>Format de jeton signé, utilisé par les access tokens d'Entra.</dd>
+<dt>Managed identity (identité managée)</dt><dd>Identité attribuée à une ressource Azure, dont Azure gère les secrets.</dd>
+<dt>MFA — Multi-Factor Authentication</dt><dd>Authentification à plusieurs facteurs, par exemple mot de passe plus application.</dd>
+<dt>Microsoft Graph</dt><dd>API unifiée d'accès aux données de Microsoft 365 et d'Entra ID.</dd>
+<dt>OAuth 2.0 / OIDC — OpenID Connect</dt><dd>OAuth 2.0 délègue une autorisation d'accès ; OIDC ajoute par-dessus l'authentification de l'utilisateur.</dd>
+<dt>oid — objectId</dt><dd>Identifiant stable d'un objet Entra, à privilégier pour corréler les événements.</dd>
+<dt>PIM — Privileged Identity Management</dt><dd>Activation temporaire et contrôlée des rôles à privilèges, plutôt qu'une attribution permanente.</dd>
+<dt>RBAC — Role-Based Access Control</dt><dd>Contrôle d'accès par rôles. Azure RBAC attribue un rôle à une identité sur un scope donné.</dd>
+<dt>SAML — Security Assertion Markup Language</dt><dd>Standard XML plus ancien pour l'authentification unique entre applications.</dd>
+<dt>SP — Service Principal</dt><dd>Identité d'une application dans un tenant.</dd>
+<dt>SSO — Single Sign-On</dt><dd>Authentification unique : une seule connexion donne accès à plusieurs applications.</dd>
+<dt>UPN — User Principal Name</dt><dd>Identifiant de connexion d'un utilisateur, au format adresse e-mail. Il peut changer, contrairement à l'oid.</dd>
+</dl>
+<h3>Microsoft 365 et gestion des appareils</h3>
+<dl class="gloss">
+<dt>Autopilot</dt><dd>Préparation automatisée d'un PC Windows neuf, sans masterisation manuelle.</dd>
+<dt>DLP — Data Loss Prevention</dt><dd>Prévention des fuites de données par détection et blocage de contenus sensibles.</dd>
+<dt>Exchange Online</dt><dd>Messagerie cloud de Microsoft 365.</dd>
+<dt>Intune</dt><dd>Service cloud de gestion des postes, mobiles et applications : inventaire, configuration, mises à jour, conformité. Son état de conformité peut alimenter l'accès conditionnel.</dd>
+<dt>MAM — Mobile Application Management</dt><dd>Protection des applications et de leurs données, sans gérer tout l'appareil.</dd>
+<dt>MDM — Mobile Device Management</dt><dd>Gestion complète d'un appareil inscrit : politiques, applications, effacement à distance.</dd>
+<dt>Microsoft 365</dt><dd>Suite cloud regroupant selon les plans bureautique, messagerie, collaboration, identité, gestion et sécurité.</dd>
+<dt>Microsoft 365 Lighthouse</dt><dd>Portail qui permet à un partenaire de suivre et de gérer les tenants Microsoft 365 de ses clients. À ne pas confondre avec Azure Lighthouse.</dd>
+<dt>OneDrive / SharePoint / Teams</dt><dd>Stockage personnel, sites et documents partagés, et collaboration. Leurs journaux et leurs partages intéressent directement le SOC.</dd>
+<dt>Purview</dt><dd>Famille de solutions pour la gouvernance, la conformité et la protection des données : classification, DLP, audit, eDiscovery.</dd>
+</dl>
+<h3>Sécurité et SOC</h3>
+<dl class="gloss">
+<dt>AIR — Automated Investigation and Response</dt><dd>Investigation et remédiation automatiques des alertes.</dd>
+<dt>ASR — Attack Surface Reduction</dt><dd>Règles qui bloquent des comportements souvent exploités par les attaquants, comme une macro qui lance un processus.</dd>
+<dt>CASB — Cloud Access Security Broker</dt><dd>Solution de visibilité et de contrôle sur l'usage des applications SaaS.</dd>
+<dt>CSPM — Cloud Security Posture Management</dt><dd>Évaluation continue de la configuration cloud pour détecter les faiblesses.</dd>
+<dt>CWPP — Cloud Workload Protection Platform</dt><dd>Protection des charges de travail cloud à l'exécution : serveurs, conteneurs, bases de données.</dd>
+<dt>Defender for Cloud</dt><dd>Service de CSPM et de CWPP pour Azure, les environnements hybrides et les autres clouds. Il regroupe des plans comme Defender for Servers.</dd>
+<dt>Defender for Servers</dt><dd>Plan de Defender for Cloud qui protège les serveurs, en deux niveaux (P1 et P2).</dd>
+<dt>Defender XDR</dt><dd>Portail et moteur de corrélation qui réunit les signaux Defender en incidents communs.</dd>
+<dt>EDR — Endpoint Detection and Response</dt><dd>Détection et réponse sur les postes et serveurs, à partir de leur télémétrie détaillée.</dd>
+<dt>FIM — File Integrity Monitoring</dt><dd>Surveillance des modifications de fichiers et de configurations sensibles.</dd>
+<dt>IOC — Indicator of Compromise</dt><dd>Indice technique d'une compromission : hash, adresse IP, domaine.</dd>
+<dt>JIT — Just-In-Time</dt><dd>Accès ouvert seulement au moment du besoin et pour une durée limitée.</dd>
+<dt>MDCA — Microsoft Defender for Cloud Apps</dt><dd>Le CASB de Microsoft : découverte et protection des applications SaaS.</dd>
+<dt>MDE — Microsoft Defender for Endpoint</dt><dd>Protection des postes et serveurs. P1 couvre la prévention, P2 ajoute notamment l'EDR, l'investigation automatisée et la chasse avancée.</dd>
+<dt>MDI — Microsoft Defender for Identity</dt><dd>Détection des attaques contre Active Directory, grâce à des capteurs sur les contrôleurs de domaine.</dd>
+<dt>MDO — Microsoft Defender for Office 365</dt><dd>Protection de la messagerie et de la collaboration contre le phishing, les liens et les pièces jointes malveillants.</dd>
+<dt>MITRE ATT&amp;CK</dt><dd>Référentiel public des tactiques et techniques d'attaquants observées.</dd>
+<dt>MSSP — Managed Security Service Provider</dt><dd>Prestataire qui opère la sécurité de ses clients, souvent via un SOC mutualisé.</dd>
+<dt>Security Copilot</dt><dd>Assistant d'IA de Microsoft dédié aux équipes de sécurité.</dd>
+<dt>Sentinel</dt><dd>SIEM et SOAR cloud de Microsoft, construit sur un workspace Log Analytics.</dd>
+<dt>SIEM — Security Information and Event Management</dt><dd>Plateforme qui centralise les journaux, les corrèle et produit des alertes.</dd>
+<dt>SOAR — Security Orchestration, Automation and Response</dt><dd>Automatisation des réponses de sécurité par des playbooks.</dd>
+<dt>SOC — Security Operations Center</dt><dd>Équipe qui surveille, détecte et traite les incidents de sécurité.</dd>
+<dt>TTP — Tactics, Techniques and Procedures</dt><dd>Façon d'opérer d'un attaquant, plus durable à détecter qu'un simple IOC.</dd>
+<dt>UEBA — User and Entity Behavior Analytics</dt><dd>Détection d'anomalies à partir du comportement habituel des utilisateurs et des machines.</dd>
+<dt>XDR — Extended Detection and Response</dt><dd>Détection et réponse étendues à plusieurs domaines : postes, identités, messagerie, applications cloud.</dd>
+<dt>Zero Trust</dt><dd>Modèle de sécurité qui vérifie explicitement chaque accès, sans confiance implicite liée au réseau.</dd>
+</dl></section>
 
 <section id="lab"><h2>Lab guidé — cartographier ton propre tenant</h2><div class="labhead"><span class="lab">2 h · subscription de test, droits Reader suffisants</span><p>Objectif : rendre concret le modèle en l'observant sur un tenant réel. Reader suffit pour l'essentiel ; n'effectue aucune modification destructive. Si tu n'as pas de tenant, décris les écrans attendus à partir de la documentation et note « observation non réalisée ».</p></div>
 <div class="step" data-n="1"><h4>Dessiner la hiérarchie · 30 min</h4><span class="click">Portail › Management groups, puis Subscriptions</span><p>Note l'arbre management group → subscription → resource groups. Pour une ressource, copie son <code>resourceId</code> complet et décompose chaque segment. Tu dois pouvoir dire, pour une attribution donnée, jusqu'où elle hérite.</p></div>
